@@ -1,14 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext.js';
 import {
-  Play,
-  Pause,
-  RotateCcw,
   Check,
   LogOut,
   ArrowRight,
-  Clock,
   Sparkles,
+  Users,
 } from 'lucide-react';
 
 interface PipelineStage {
@@ -31,49 +28,7 @@ export const WorkspaceHomePage: React.FC = () => {
   const { user, logout } = useAuth();
 
   // ----------------------------------------------------
-  // 1. TIMER STATE (Top-Left Box)
-  // ----------------------------------------------------
-  const [timerSeconds, setTimerSeconds] = useState(25 * 60);
-  const [isRunning, setIsRunning] = useState(false);
-  const [timerMode, setTimerMode] = useState<'25' | '5' | '50'>('25');
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (isRunning && timerSeconds > 0) {
-      interval = setInterval(() => {
-        setTimerSeconds((prev) => prev - 1);
-      }, 1000);
-    } else if (timerSeconds === 0) {
-      setIsRunning(false);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isRunning, timerSeconds]);
-
-  const handleToggleTimer = () => setIsRunning(!isRunning);
-
-  const handleResetTimer = (minutes = 25) => {
-    setIsRunning(false);
-    setTimerSeconds(minutes * 60);
-  };
-
-  const handleSelectMode = (mode: '25' | '5' | '50') => {
-    setTimerMode(mode);
-    const mins = parseInt(mode, 10);
-    handleResetTimer(mins);
-  };
-
-  const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60)
-      .toString()
-      .padStart(2, '0');
-    const s = (secs % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-  };
-
-  // ----------------------------------------------------
-  // 2. PIPELINE PROGRESS STATE (Top-Right Box: Read-Only Pipeline)
+  // 1. PIPELINE PROGRESS STATE (Top-Right Box: Read-Only Pipeline)
   // ----------------------------------------------------
   const [stages] = useState<PipelineStage[]>([
     { id: 1, label: 'Sprint Spec', subtitle: 'Architecture', status: 'completed' },
@@ -83,7 +38,7 @@ export const WorkspaceHomePage: React.FC = () => {
   ]);
 
   // ----------------------------------------------------
-  // 3. TEAM MEMBERS STATE (Bottom-Left Box)
+  // 2. TEAM MEMBERS STATE (Left Sidebar Box)
   // ----------------------------------------------------
   const currentUserName = user?.name || 'Shubham Biswal';
   const teamMembers: TeamMember[] = [
@@ -188,111 +143,38 @@ export const WorkspaceHomePage: React.FC = () => {
 
       {/* ----------------------------------------------------
           MAIN OVERVIEW CANVAS (Black Theme)
-          [ Timer (Top-Left) ]        [ Pipeline Progress (Top-Right) ]
-          [ Team Members (Btm-Left) ] [ Plain Text 'Task' (Btm-Right) ]
+          [ Team Members (Left) ]  [ Pipeline & Plain Text 'Task' (Right) ]
       ---------------------------------------------------- */}
       <main className="flex-1 w-full px-4 sm:px-6 lg:px-8 py-4 space-y-4">
         <div className="flex flex-col lg:flex-row gap-4 items-start w-full">
           {/* --------------------------------------------------
-              LEFT SIDEBAR: TIMER + TEAM MEMBERS
+              LEFT SIDEBAR: TEAM MEMBERS
               Slim, compact width (lg:w-[240px])
           --------------------------------------------------- */}
           <div className="w-full lg:w-[240px] shrink-0 space-y-3">
-            {/* 1. TOP-LEFT CARD: TIMER */}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-[12px] p-3 space-y-2.5 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-1.5">
-                  <Clock className="w-3.5 h-3.5 text-blue-400" />
-                  <h2 className="text-xs font-semibold tracking-tight text-zinc-200">
-                    Timer
-                  </h2>
-                </div>
-                <span
-                  className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${
-                    isRunning
-                      ? 'bg-blue-950/70 text-blue-400 border-blue-800/40'
-                      : 'bg-zinc-950 text-zinc-500 border-zinc-800'
-                  }`}
-                >
-                  {isRunning ? 'Active' : 'Paused'}
-                </span>
-              </div>
-
-              {/* Digital Display */}
-              <div className="text-center py-0.5">
-                <div className="font-mono text-2xl font-bold tracking-tight text-white">
-                  {formatTime(timerSeconds)}
-                </div>
-              </div>
-
-              {/* Mode Presets */}
-              <div className="grid grid-cols-3 gap-1 p-0.5 bg-zinc-950 rounded-[6px] border border-zinc-800/80">
-                {(['25', '5', '50'] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => handleSelectMode(mode)}
-                    className={`py-0.5 text-[11px] font-medium rounded-[4px] transition-colors ${
-                      timerMode === mode
-                        ? 'bg-zinc-800 text-white font-semibold'
-                        : 'text-zinc-400 hover:text-zinc-200'
-                    }`}
-                  >
-                    {mode}m
-                  </button>
-                ))}
-              </div>
-
-              {/* Timer Controls */}
-              <div className="flex items-center space-x-1.5 pt-0.5">
-                <button
-                  type="button"
-                  onClick={handleToggleTimer}
-                  className="flex-1 flex items-center justify-center space-x-1.5 py-1.5 px-2 rounded-[6px] bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-medium transition-colors"
-                >
-                  {isRunning ? (
-                    <>
-                      <Pause className="w-3 h-3" />
-                      <span>Pause</span>
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-3 h-3 fill-current" />
-                      <span>Start</span>
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleResetTimer(parseInt(timerMode, 10))}
-                  className="p-1.5 rounded-[6px] bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/80 transition-colors"
-                  title="Reset timer"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                </button>
-              </div>
-            </div>
-
-            {/* 3. BOTTOM-LEFT CARD: TEAM MEMBERS */}
+            {/* TEAM MEMBERS */}
             <div className="bg-zinc-900 border border-zinc-800 rounded-[12px] p-3 space-y-2 shadow-sm">
               <div className="flex items-center justify-between">
-                <div>
+                <div className="flex items-center space-x-1.5">
+                  <Users className="w-3.5 h-3.5 text-blue-400" />
                   <h2 className="text-xs font-semibold tracking-tight text-zinc-200">
                     Team Members
                   </h2>
-                  <p className="text-[10px] text-zinc-500">({teamMembers.length} active)</p>
                 </div>
-
-                {selectedMemberId && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedMemberId(null)}
-                    className="text-[10px] text-blue-400 hover:underline"
-                  >
-                    Reset
-                  </button>
-                )}
+                <div className="flex items-center space-x-2">
+                  <span className="text-[10px] text-zinc-500 font-mono">
+                    {teamMembers.length} active
+                  </span>
+                  {selectedMemberId && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMemberId(null)}
+                      className="text-[10px] text-blue-400 hover:underline"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Member Items */}
