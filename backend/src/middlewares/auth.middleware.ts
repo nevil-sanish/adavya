@@ -45,11 +45,10 @@ export async function requireAuth(
       return;
     }
 
-    const isGmail = email.endsWith('@gmail.com') || email.endsWith('@googlemail.com');
-    if (!isGmail) {
+    if (!decoded.email_verified || !/^[^@\s]+@iiitkottayam\.ac\.in$/.test(email)) {
       res.status(403).json({
-        error: 'GMAIL_RESTRICTED',
-        message: `Access restricted: Only @gmail.com accounts are permitted. (${email} is restricted).`,
+        error: 'INSTITUTION_EMAIL_REQUIRED',
+        message: 'Please sign in with your verified @iiitkottayam.ac.in Google account.',
       });
       return;
     }

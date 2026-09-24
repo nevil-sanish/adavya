@@ -1,13 +1,14 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
 import { initializeFirebaseAdmin } from './config/firebase.js';
 import { authRouter } from './routes/auth.routes.js';
 import { teamRouter } from './routes/team.routes.js';
 import { taskRouter } from './routes/task.routes.js';
 
 // Load environment variables
-dotenv.config();
+dotenv.config({ path: fileURLToPath(new URL('../.env', import.meta.url)) });
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin();

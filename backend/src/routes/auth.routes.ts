@@ -15,7 +15,7 @@ const usersStore = new Map<string, User>();
 
 /**
  * POST /api/auth/google
- * Validates Google/Firebase ID token with Gmail restriction and persists to Firestore
+ * Validates Google/Firebase ID token with IIIT Kottayam email restriction and persists to Firestore
  */
 authRouter.post('/google', async (req, res): Promise<void> => {
   const parseResult = googleAuthSchema.safeParse(req.body);
@@ -41,11 +41,10 @@ authRouter.post('/google', async (req, res): Promise<void> => {
       return;
     }
 
-    const isGmail = email.endsWith('@gmail.com') || email.endsWith('@googlemail.com');
-    if (!isGmail) {
+    if (!decoded.email_verified || !/^[^@\s]+@iiitkottayam\.ac\.in$/.test(email)) {
       res.status(403).json({
-        error: 'GMAIL_RESTRICTED',
-        message: `Access restricted: Only @gmail.com accounts are permitted. (${email} is restricted).`,
+        error: 'INSTITUTION_EMAIL_REQUIRED',
+        message: 'Please sign in with your verified @iiitkottayam.ac.in Google account.',
       });
       return;
     }

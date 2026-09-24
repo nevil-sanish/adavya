@@ -1,10 +1,6 @@
 import admin from 'firebase-admin';
 import fs from 'fs';
-import path from 'path';
-
-const projectId = process.env.FIREBASE_PROJECT_ID || 'adavya-f796d';
-const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+import { fileURLToPath } from 'url';
 
 let isInitialized = false;
 
@@ -13,7 +9,11 @@ export function initializeFirebaseAdmin(): admin.app.App {
     return admin.app();
   }
   
-  const serviceAccountPath = path.join(process.cwd(), 'serviceAccountKey.json');
+  // Read credentials after the entry point loads .env, not during module import.
+  const projectId = process.env.FIREBASE_PROJECT_ID || 'adavya-f796d';
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  const serviceAccountPath = fileURLToPath(new URL('../../serviceAccountKey.json', import.meta.url));
 
   try {
     if (fs.existsSync(serviceAccountPath)) {
@@ -34,6 +34,9 @@ export function initializeFirebaseAdmin(): admin.app.App {
       });
       console.log(`[Firebase Admin] Initialized with Service Account for ${projectId}`);
     } else {
+      if (clientEmail || privateKey) {
+        throw new Error('Set both FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in backend/.env.');
+      }
       admin.initializeApp({
         projectId,
       });
@@ -41,7 +44,8 @@ export function initializeFirebaseAdmin(): admin.app.App {
     }
     isInitialized = true;
   } catch (err) {
-    console.warn('[Firebase Admin] Warning during initialization:', err);
+    console.error('[Firebase Admin] Initialization failed. Check the backend Firebase credentials.');
+    throw err;
   }
 
   return admin.app();

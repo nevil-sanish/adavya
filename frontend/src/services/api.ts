@@ -1,9 +1,7 @@
-import { jwtDecode } from 'jwt-decode';
 import { doc, setDoc } from 'firebase/firestore';
-import { db } from './firebase.js';
+import { auth, db, signOutFirebase } from './firebase.js';
 import {
   AuthResponse,
-  GoogleTokenPayload,
   CreateTeamRequest,
   JoinTeamRequest,
   OnboardingResponse,
@@ -31,111 +29,25 @@ export class AuthApiError extends Error {
   }
 }
 
-/**
- * Google OAuth Authentication (Gmail-Restricted)
- */
+/** Verify the Firebase token on the server before creating an app session. */
 export async function authenticateWithGoogle(idToken: string): Promise<AuthResponse> {
-  if (API_BASE_URL) {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/google`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ idToken }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new AuthApiError(data.message || 'Google authentication failed', data.code, response.status);
-      }
-      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(data.user));
-      return data;
-    } catch (err) {
-      if (err instanceof AuthApiError) throw err;
-      throw new AuthApiError('Network connection failed while contacting auth server.', 'NETWORK_ERROR', 503);
-    }
-  }
-
-  // Client-Side parsing
-  await simulateDelay(350);
-
-  if (!idToken) {
-    throw new AuthApiError('Invalid or missing Google ID token.', 'INVALID_TOKEN', 400);
-  }
-
-  let payload: GoogleTokenPayload;
   try {
-    payload = jwtDecode<GoogleTokenPayload>(idToken);
-  } catch {
-    throw new AuthApiError('Unable to parse Google ID token signature.', 'INVALID_TOKEN', 400);
+    const response = await fetch(`${API_BASE_URL || 'http://localhost:5000'}/api/auth/google`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new AuthApiError(data.message || 'Google authentication failed.', data.error, response.status);
+    }
+    localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(data.user));
+    localStorage.setItem(STORAGE_KEY_TOKEN, idToken);
+    return data;
+  } catch (err) {
+    if (err instanceof AuthApiError) throw err;
+    throw new AuthApiError('Unable to reach the sign-in server. Please try again.', 'NETWORK_ERROR', 503);
   }
-
-  if (payload.exp && payload.exp * 1000 < Date.now()) {
-    throw new AuthApiError('Google session expired. Please sign in again.', 'EXPIRED_TOKEN', 401);
-  }
-
-  const email = payload.email?.toLowerCase().trim();
-  if (!email) {
-    throw new AuthApiError('Google account does not contain a verified email.', 'MISSING_EMAIL', 400);
-  }
-
-  const isGmail = email.endsWith('@gmail.com') || email.endsWith('@googlemail.com');
-  if (!isGmail) {
-    throw new AuthApiError(
-      `Access restricted: Only @gmail.com accounts are permitted to access Adavya. (${email} is restricted)`,
-      'GMAIL_RESTRICTED',
-      403
-    );
-  }
-
-  const now = new Date().toISOString();
-  const user: User = {
-    id: `usr_${Math.random().toString(36).substring(2, 10)}`,
-    email,
-    name: payload.name || email.split('@')[0],
-    googleId: payload.sub || `g_${Date.now()}`,
-    hasOnboarded: false,
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
-  localStorage.setItem(STORAGE_KEY_TOKEN, idToken);
-
-  return { user, isNewUser: true, token: idToken };
-}
-
-/**
- * Fast Mock Login for testing
- */
-export async function authenticateWithMockGoogle(options?: {
-  email?: string;
-  name?: string;
-  rejectNonGmail?: boolean;
-}): Promise<AuthResponse> {
-  await simulateDelay(400);
-
-  const email = options?.email || 'shubham.adavya@gmail.com';
-  if (options?.rejectNonGmail || (!email.endsWith('@gmail.com') && !email.endsWith('@googlemail.com'))) {
-    throw new AuthApiError(
-      `Access restricted: Only @gmail.com accounts are permitted. (${email} is restricted)`,
-      'GMAIL_RESTRICTED',
-      403
-    );
-  }
-
-  const user: User = {
-    id: 'usr_demo_1001',
-    email,
-    name: options?.name || 'Shubham Biswal',
-    googleId: 'g_demo_1234567890',
-    hasOnboarded: false,
-    createdAt: new Date().toISOString(),
-  };
-
-  localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
-  localStorage.setItem(STORAGE_KEY_TOKEN, 'mock_token');
-
-  return { user, isNewUser: true, token: 'mock_token' };
 }
 
 /**
@@ -358,12 +270,31 @@ export async function joinTeamTaskspace(request: JoinTeamRequest): Promise<Onboa
 }
 
 export async function getCurrentSession(): Promise<User | null> {
-  const raw = localStorage.getItem(STORAGE_KEY_USER);
-  if (!raw) return null;
   try {
-    return JSON.parse(raw) as User;
+    await auth.authStateReady();
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser?.emailVerified || !/^[^@\s]+@iiitkottayam\.ac\.in$/i.test(firebaseUser.email || '')) {
+      await logoutSession();
+      await signOutFirebase();
+      return null;
+    }
+    const token = await firebaseUser.getIdToken();
+    const response = await fetch(`${API_BASE_URL || 'http://localhost:5000'}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error('Session verification failed.');
+    const { user } = await response.json();
+    // Preserve local onboarding state only for the same verified identity.
+    const raw = localStorage.getItem(STORAGE_KEY_USER);
+    const cached = raw ? JSON.parse(raw) as User : null;
+    const sessionUser = cached?.googleId === firebaseUser.uid && cached?.email === user.email
+      ? { ...cached, email: user.email, googleId: firebaseUser.uid }
+      : user;
+    localStorage.setItem(STORAGE_KEY_TOKEN, token);
+    localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(sessionUser));
+    return sessionUser;
   } catch {
-    localStorage.removeItem(STORAGE_KEY_USER);
+    await logoutSession();
     return null;
   }
 }

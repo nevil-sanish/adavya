@@ -2,7 +2,6 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { User } from '../types/auth.js';
 import {
   authenticateWithGoogle,
-  authenticateWithMockGoogle,
   getCurrentSession,
   logoutSession,
   createTeamTaskspace,
@@ -17,7 +16,6 @@ interface AuthContextType {
   authError: string | null;
   loginWithGoogleToken: (idToken: string) => Promise<boolean>;
   loginWithFirebaseGoogle: () => Promise<boolean>;
-  loginWithDemo: (options?: { email?: string; name?: string; rejectNonGmail?: boolean }) => Promise<boolean>;
   createTeam: (teamName: string) => Promise<boolean>;
   joinTeam: (teamId: string) => Promise<boolean>;
   logout: () => Promise<void>;
@@ -74,30 +72,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const loginWithDemo = useCallback(
-    async (options?: { email?: string; name?: string; rejectNonGmail?: boolean }): Promise<boolean> => {
-      setLoading(true);
-      setAuthError(null);
-      try {
-        const response = await authenticateWithMockGoogle(options);
-        setUser(response.user);
-        return true;
-      } catch (err: unknown) {
-        const message =
-          err instanceof AuthApiError
-            ? err.message
-            : err instanceof Error
-            ? err.message
-            : 'Authentication failed.';
-        setAuthError(message);
-        return false;
-      } finally {
-        setLoading(false);
-      }
-    },
-    []
-  );
-
   const createTeam = useCallback(async (teamName: string): Promise<boolean> => {
     setLoading(true);
     setAuthError(null);
@@ -141,7 +115,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const loginWithFirebaseGoogle = useCallback(async (): Promise<boolean> => {
-    setLoading(true);
     setAuthError(null);
     try {
       const response = await signInWithFirebaseGoogle();
@@ -152,8 +125,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         err instanceof Error ? err.message : 'Firebase Google authentication failed.';
       setAuthError(message);
       return false;
-    } finally {
-      setLoading(false);
     }
   }, []);
 
@@ -177,7 +148,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         authError,
         loginWithGoogleToken,
         loginWithFirebaseGoogle,
-        loginWithDemo,
         createTeam,
         joinTeam,
         logout,
