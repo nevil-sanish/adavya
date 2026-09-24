@@ -140,10 +140,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  const loginWithFirebaseGoogle = useCallback(async (): Promise<boolean> => {
+    setLoading(true);
+    setAuthError(null);
+    try {
+      const response = await signInWithFirebaseGoogle();
+      setUser(response.user);
+      return true;
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Firebase Google authentication failed.';
+      setAuthError(message);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     setLoading(true);
     try {
       await logoutSession();
+      await signOutFirebase().catch(() => {});
       setUser(null);
       setAuthError(null);
     } finally {
@@ -158,6 +176,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loading,
         authError,
         loginWithGoogleToken,
+        loginWithFirebaseGoogle,
         loginWithDemo,
         createTeam,
         joinTeam,

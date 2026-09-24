@@ -1,35 +1,33 @@
 import React, { useState } from 'react';
-import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
 import { useAuth } from '../context/AuthContext.js';
 import { useNavigate } from 'react-router-dom';
 import { ShieldAlert, Sparkles, CheckCircle2, AlertCircle, ArrowRight, UserCheck } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
-  const { loginWithGoogleToken, loginWithDemo, authError, clearError } = useAuth();
+  const { loginWithFirebaseGoogle, loginWithDemo, authError, clearError } = useAuth();
   const [isVerifying, setIsVerifying] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
-    if (!credentialResponse.credential) {
-      setLocalError('Google did not provide a valid ID token credential.');
-      return;
-    }
-
+  const handleGoogleSignIn = async () => {
     clearError();
     setLocalError(null);
     setIsVerifying(true);
 
-    const success = await loginWithGoogleToken(credentialResponse.credential);
-    setIsVerifying(false);
-
-    if (success) {
-      navigate('/onboarding');
+    try {
+      const success = await loginWithFirebaseGoogle();
+      if (success) {
+        navigate('/onboarding');
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setLocalError(err.message);
+      } else {
+        setLocalError('Authentication failed. Please try again.');
+      }
+    } finally {
+      setIsVerifying(false);
     }
-  };
-
-  const handleGoogleError = () => {
-    setLocalError('Google OAuth popup was closed or authentication failed.');
   };
 
   // Demo Sign-in for immediate verification (valid Gmail)
@@ -126,26 +124,41 @@ export const LoginPage: React.FC = () => {
 
           {/* Google Login Section */}
           <div className="space-y-4">
-            <div className="flex flex-col items-center justify-center min-h-[44px]">
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              disabled={isVerifying}
+              className="w-full flex items-center justify-center space-x-3 py-3 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-850 border border-zinc-700/80 hover:border-zinc-500 text-zinc-100 font-medium text-sm transition-all duration-150 shadow-lg shadow-black/40 group disabled:opacity-60 disabled:cursor-not-allowed"
+            >
               {isVerifying ? (
-                <div className="flex items-center space-x-3 text-zinc-300 text-sm py-2">
-                  <div className="w-4 h-4 border-2 border-zinc-600 border-t-zinc-200 rounded-full animate-spin" />
-                  <span>Verifying Google token & session...</span>
-                </div>
+                <>
+                  <div className="w-4 h-4 border-2 border-zinc-500 border-t-zinc-100 rounded-full animate-spin" />
+                  <span>Connecting to Google...</span>
+                </>
               ) : (
-                <div className="w-full flex justify-center">
-                  <GoogleLogin
-                    onSuccess={handleGoogleSuccess}
-                    onError={handleGoogleError}
-                    theme="filled_black"
-                    shape="pill"
-                    size="large"
-                    text="continue_with"
-                    width="100%"
-                  />
-                </div>
+                <>
+                  <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.66v3.05h3.87c2.27-2.09 3.67-5.17 3.67-9.15z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.87-3.05c-1.08.72-2.45 1.16-4.06 1.16-3.13 0-5.78-2.11-6.73-4.96H1.24v3.15C3.26 21.36 7.34 24 12 24z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.27 14.24c-.25-.72-.38-1.49-.38-2.24s.13-1.52.38-2.24V6.61H1.24C.45 8.18 0 9.94 0 12s.45 3.82 1.24 5.39l4.03-3.15z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.24 6.61l4.03 3.15c.95-2.85 3.6-4.96 6.73-4.96z"
+                    />
+                  </svg>
+                  <span className="font-semibold tracking-wide">Continue with Google</span>
+                </>
               )}
-            </div>
+            </button>
 
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
@@ -202,11 +215,11 @@ export const LoginPage: React.FC = () => {
         <div className="flex items-center justify-center space-x-6 text-xs text-zinc-500">
           <div className="flex items-center space-x-1.5">
             <CheckCircle2 className="w-3.5 h-3.5 text-zinc-400" />
-            <span>Encrypted Token Exchange</span>
+            <span>Firebase OAuth 2.0</span>
           </div>
           <div className="flex items-center space-x-1.5">
             <Sparkles className="w-3.5 h-3.5 text-zinc-400" />
-            <span>Multi-Agent Platform</span>
+            <span>Gmail Domain Verified</span>
           </div>
         </div>
       </div>
