@@ -5,15 +5,8 @@ import {
   CheckCircle2,
   XCircle,
 } from 'lucide-react';
-import {
-  doc,
-  setDoc,
-  collection,
-  getDocs,
-  query,
-  where,
-  onSnapshot,
-} from 'firebase/firestore';
+import { Round1CodeEntry } from './Round1CodeEntry.js';
+import { doc, setDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../services/firebase.js';
 import { useAuth } from '../context/AuthContext.js';
 import { RoundInstance } from '../types/auth.js';
@@ -29,6 +22,7 @@ interface PlayerState {
 interface TaskOrientationGeneratorProps {
   onStartTimer?: () => void;
   teamId?: string;
+  onRound1Complete?: () => void;
 }
 
 /**
@@ -84,6 +78,7 @@ const INITIAL_PLAYERS: PlayerState[] = [
 export const TaskOrientationGenerator: React.FC<TaskOrientationGeneratorProps> = ({
   onStartTimer,
   teamId: propTeamId,
+  onRound1Complete,
 }) => {
   const { user } = useAuth();
   const activeTeamId = propTeamId || user?.teamId || 'TEAM-ALPHA';
@@ -497,6 +492,9 @@ export const TaskOrientationGenerator: React.FC<TaskOrientationGeneratorProps> =
           );
         })}
       </div>
+
+      {/* Round 1: code revealed on the field phones after a correct rotation sequence */}
+      <Round1CodeEntry onVerified={onRound1Complete} />
 
       {/* Bottom subtle indicator */}
       <div className="pt-2 text-center border-t border-zinc-800/60 flex items-center justify-between text-[11px] text-zinc-500">

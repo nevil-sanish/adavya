@@ -8,6 +8,7 @@ import {
   User,
   TeamTaskspace,
 } from '../types/auth.js';
+import type { PoseId, PoseSlot } from '../types/firestore.js';
 import {
   validateTeamIdFormat,
   generateTeamId,
@@ -306,4 +307,97 @@ export async function logoutSession(): Promise<void> {
 
 function simulateDelay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export interface RoundVerifyResult {
+  correct: boolean;
+  message: string;
+}
+
+export interface Round2State {
+  roundStatus: 'not_started' | 'round1' | 'round2' | 'round3' | 'completed';
+  clues: string[];
+  completedAt?: string | null;
+}
+
+/** Calls a round endpoint with the signed-in user's Firebase token. */
+async function roundRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const fbUser = auth.currentUser;
+  if (!fbUser) {
+    throw new AuthApiError('Session expired. Please log in again.', 'SESSION_NOT_FOUND', 401);
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL || 'http://localhost:5000'}/api/rounds${path}`, {
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${await fbUser.getIdToken()}`,
+      },
+    });
+  } catch {
+    throw new AuthApiError('Unable to reach the server. Please try again.', 'NETWORK_ERROR', 503);
+  }
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new AuthApiError(data.message || 'Request failed.', data.error, response.status);
+  }
+  return data;
+}
+
+/** Sends the code revealed on the field phones to the server for Round 1 verification. */
+export function verifyRound1Code(code: string): Promise<RoundVerifyResult> {
+  return roundRequest('/round1/verify', { method: 'POST', body: JSON.stringify({ code }) });
+}
+
+/** Fetches the team's round status and, once unlocked, the Round 2 clues. */
+export function getRound2State(): Promise<Round2State> {
+  return roundRequest('/round2');
+}
+
+/** Submits the three words found by the field team, in order. */
+export function verifyRound2Words(words: [string, string, string]): Promise<RoundVerifyResult> {
+  return roundRequest('/round2/verify', { method: 'POST', body: JSON.stringify({ words }) });
+}
+
+export interface TeamProgressMember {
+  uid: string;
+  name: string;
+  email: string;
+  isCaptain: boolean;
+  isYou: boolean;
+}
+
+export interface TeamProgress {
+  teamId: string;
+  teamName: string;
+  roundStatus: Round2State['roundStatus'];
+  members: TeamProgressMember[];
+}
+
+/** Fetches the caller's team roster and round progress. */
+export function getTeamProgress(): Promise<TeamProgress> {
+  return roundRequest('/progress');
+}
+
+/** Dev only: skips the team to the next task. The server rejects this outside development. */
+export function devAdvanceTask(): Promise<{ roundStatus: TeamProgress['roundStatus'] }> {
+  return roundRequest('/dev/advance', { method: 'POST' });
+}
+
+export interface Round3State {
+  teamId: string;
+  assignments: Record<PoseSlot, PoseId>;
+}
+
+/** Fetches the pose each performer must hold in Round 3. */
+export function getRound3State(): Promise<Round3State> {
+  return roundRequest('/round3');
+}
+
+/** Asks the server to close Round 3 once every performer is verified. */
+export function completeRound3(): Promise<RoundVerifyResult> {
+  return roundRequest('/round3/complete', { method: 'POST' });
 }

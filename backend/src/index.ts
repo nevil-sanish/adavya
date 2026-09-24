@@ -6,6 +6,7 @@ import { initializeFirebaseAdmin } from './config/firebase.js';
 import { authRouter } from './routes/auth.routes.js';
 import { teamRouter } from './routes/team.routes.js';
 import { taskRouter } from './routes/task.routes.js';
+import { roundRouter } from './routes/round.routes.js';
 
 // Load environment variables
 dotenv.config({ path: fileURLToPath(new URL('../.env', import.meta.url)) });
@@ -49,6 +50,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 app.use('/api/auth', authRouter);
 app.use('/api/teams', teamRouter);
 app.use('/api/tasks', taskRouter);
+app.use('/api/rounds', roundRouter);
 app.use('/api/rounds', taskRouter);
 
 // 404 handler

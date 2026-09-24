@@ -47,18 +47,25 @@ const round1 = [
     teamID: 'ALPHA-7K2QX',
     sequence: [1, 0, 1],
     playerActions: { uid_alice: 1, uid_bob: 0, uid_carol: 1 },
+    code: 'ORBIT42',
   },
   {
     teamID: 'BETA-9M4TZ',
     sequence: [0, 1, 1],
     playerActions: { uid_dave: 0, uid_erin: null, uid_frank: 1 },
+    code: 'SPIN7Q',
   },
 ];
 
 const round2 = [
   {
     teamID: 'ALPHA-7K2QX',
-    cluesGenerated: ['It burns but is not fire', 'Found in every desert'],
+    cluesGenerated: [
+      'Where books outnumber people and silence is the rule.',
+      'Where every meal on campus is served.',
+      'Where the day begins with the national flag.',
+    ],
+    startedAt: '2026-09-24T10:00:00.000Z',
     sequence: ['sun', 'sand', 'oasis'],
   },
 ];

@@ -106,9 +106,14 @@ export async function addScore(teamId: string, delta: number): Promise<void> {
 
 /* --------------------------------- round 1 -------------------------------- */
 
-export async function initRound1(teamId: string, sequence: Round1Doc['sequence'], memberIds: string[]): Promise<void> {
+export async function initRound1(
+  teamId: string,
+  sequence: Round1Doc['sequence'],
+  memberIds: string[],
+  code: string
+): Promise<void> {
   const playerActions = Object.fromEntries(memberIds.map((id) => [id, null]));
-  await setDoc(roundEntryRef('round1', teamId), { teamID: teamId, sequence, playerActions });
+  await setDoc(roundEntryRef('round1', teamId), { teamID: teamId, sequence, playerActions, code });
 }
 
 export async function getRound1(teamId: string): Promise<Round1Doc | null> {

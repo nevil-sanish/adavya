@@ -4,30 +4,61 @@ import {
   Clock,
   Check,
   LogOut,
-  ArrowRight,
   Sparkles,
   Users,
 } from 'lucide-react';
 import { TaskOrientationGenerator } from '../components/TaskOrientationGenerator.js';
+import { Round2WordEntry } from '../components/Round2WordEntry.js';
+import { Round3PoseRelay } from '../components/Round3PoseRelay.js';
+import { devAdvanceTask, getTeamProgress, type TeamProgress } from '../services/api.js';
 
-interface PipelineStage {
-  id: number;
-  label: string;
-  subtitle: string;
-  status: 'completed' | 'active' | 'pending';
-}
+/** The six tasks of the game, in play order. Only the first two are built so far. */
+const TASKS = [
+  'Sensor Sequence',
+  'Geofence Hunt',
+  'Pose Relay',
+  'Task 4',
+  'Task 5',
+  'Task 6',
+];
 
-interface TeamMember {
-  id: string;
-  name: string;
-  role: string;
-  status: 'active' | 'focusing' | 'idle';
-  avatarColor: string;
-  initials: string;
-}
+/** How many tasks a team has finished, derived from its round status. */
+const COMPLETED_TASKS: Record<TeamProgress['roundStatus'], number> = {
+  not_started: 0,
+  round1: 0,
+  round2: 1,
+  round3: 2,
+  completed: 3,
+};
+
+const AVATAR_COLORS = ['#097fe8', '#f64932', '#ffb110', '#62aef0'];
+
+const initialsOf = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase() || '?';
 
 export const WorkspaceHomePage: React.FC = () => {
   const { user, logout } = useAuth();
+
+  // Which round the team is on decides whether HQ sees Round 1 or Round 2.
+  const [roundStatus, setRoundStatus] = useState<TeamProgress['roundStatus'] | null>(null);
+  const [teamMembers, setTeamMembers] = useState<TeamProgress['members'] | null>(null);
+  useEffect(() => {
+    getTeamProgress()
+      .then((progress) => {
+        setRoundStatus(progress.roundStatus);
+        setTeamMembers(progress.members);
+      })
+      .catch(() => {
+        setRoundStatus('not_started');
+        setTeamMembers([]);
+      });
+  }, []);
 
   // ----------------------------------------------------
   // 1. TIMER STATE (Initialized at 00:00, Idle on Page Load)
@@ -56,56 +87,25 @@ export const WorkspaceHomePage: React.FC = () => {
     return `${m}:${s}`;
   };
 
-  // ----------------------------------------------------
-  // 1. PIPELINE PROGRESS STATE (Top-Right Box: Read-Only Pipeline)
-  // ----------------------------------------------------
-  const [stages] = useState<PipelineStage[]>([
-    { id: 1, label: 'Sprint Spec', subtitle: 'Architecture', status: 'completed' },
-    { id: 2, label: 'Agent Pipeline', subtitle: 'Synthesis', status: 'active' },
-    { id: 3, label: 'Code Review', subtitle: 'Automated QA', status: 'pending' },
-    { id: 4, label: 'Deployment', subtitle: 'Production', status: 'pending' },
-  ]);
+  const completedTasks = COMPLETED_TASKS[roundStatus ?? 'not_started'];
 
-  // ----------------------------------------------------
-  // 2. TEAM MEMBERS STATE (Left Sidebar Box)
-  // ----------------------------------------------------
-  const currentUserName = user?.name || 'Shubham Biswal';
-  const teamMembers: TeamMember[] = [
-    {
-      id: 'm-1',
-      name: `${currentUserName} (You)`,
-      role: 'Lead Architect',
-      status: 'active',
-      avatarColor: '#097fe8',
-      initials: currentUserName.substring(0, 2).toUpperCase(),
-    },
-    {
-      id: 'm-2',
-      name: 'Nevil Sanish',
-      role: 'Platform Engineer',
-      status: 'focusing',
-      avatarColor: '#f64932',
-      initials: 'NS',
-    },
-    {
-      id: 'm-3',
-      name: 'Aria Vance',
-      role: 'AI Agent Specialist',
-      status: 'active',
-      avatarColor: '#ffb110',
-      initials: 'AV',
-    },
-    {
-      id: 'm-4',
-      name: 'Devin Cole',
-      role: 'QA & Verification',
-      status: 'idle',
-      avatarColor: '#62aef0',
-      initials: 'DC',
-    },
-  ];
+  // Dev-only shortcut for testing later tasks without solving earlier ones.
+  const [isAdvancing, setIsAdvancing] = useState(false);
+  const [devError, setDevError] = useState<string | null>(null);
+  const handleDevAdvance = async () => {
+    setIsAdvancing(true);
+    setDevError(null);
+    try {
+      const { roundStatus: next } = await devAdvanceTask();
+      setRoundStatus(next);
+    } catch (err) {
+      setDevError(err instanceof Error ? err.message : 'Could not skip the task.');
+    } finally {
+      setIsAdvancing(false);
+    }
+  };
 
-  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+  const currentUserName = user?.name || 'Player';
 
   const currentTaskspaceName = user?.taskspaceName || 'Core Intelligence';
   const currentTeamId = user?.teamId || 'TEAM-ALPHA';
@@ -224,79 +224,46 @@ export const WorkspaceHomePage: React.FC = () => {
                     Team Members
                   </h2>
                 </div>
-                <div className="flex items-center space-x-2">
+                {teamMembers && (
                   <span className="text-[10px] text-zinc-500 font-mono">
-                    {teamMembers.length} active
+                    {teamMembers.length} {teamMembers.length === 1 ? 'member' : 'members'}
                   </span>
-                  {selectedMemberId && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedMemberId(null)}
-                      className="text-[10px] text-blue-400 hover:underline"
-                    >
-                      Reset
-                    </button>
-                  )}
-                </div>
+                )}
               </div>
 
-              {/* Member Items */}
-              <div className="space-y-1.5">
-                {teamMembers.map((member) => {
-                  const isSelected = selectedMemberId === member.id;
-
-                  return (
-                    <div
-                      key={member.id}
-                      onClick={() =>
-                        setSelectedMemberId(isSelected ? null : member.id)
-                      }
-                      className={`flex items-center justify-between py-1.5 px-2 rounded-[6px] border transition-all cursor-pointer ${
-                        isSelected
-                          ? 'bg-blue-950/40 border-blue-600 text-white'
-                          : 'bg-zinc-950/50 border-zinc-800/80 hover:bg-zinc-800/60'
-                      }`}
-                    >
-                      <div className="flex items-center space-x-2 flex-1 min-w-0">
-                        {/* Colored border character mark */}
+              {teamMembers === null ? (
+                <p className="text-[11px] text-zinc-500 py-1">Loading team…</p>
+              ) : teamMembers.length === 0 ? (
+                <p className="text-[11px] text-zinc-500 py-1">No team members found.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {teamMembers.map((member, idx) => {
+                    const color = AVATAR_COLORS[idx % AVATAR_COLORS.length];
+                    return (
+                      <li
+                        key={member.uid || member.email || idx}
+                        className="flex items-center space-x-2 py-1.5 px-2 rounded-[6px] border bg-zinc-950/50 border-zinc-800/80"
+                      >
                         <div
                           className="w-6 h-6 rounded-full bg-zinc-900 flex items-center justify-center text-[10px] font-bold shrink-0"
-                          style={{
-                            border: `2px solid ${member.avatarColor}`,
-                            color: member.avatarColor,
-                          }}
+                          style={{ border: `2px solid ${color}`, color }}
                         >
-                          {member.initials}
+                          {initialsOf(member.name)}
                         </div>
-
-                        <div className="text-left flex-1 min-w-0">
+                        <div className="flex-1 min-w-0">
                           <p className="text-[11px] font-medium text-zinc-200 leading-tight truncate">
                             {member.name}
+                            {member.isYou && <span className="text-zinc-500"> (You)</span>}
                           </p>
                           <p className="text-[9px] text-zinc-500 leading-none mt-0.5 truncate">
-                            {member.role}
+                            {member.isCaptain ? 'Captain' : 'Member'}
                           </p>
                         </div>
-                      </div>
-
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                          member.status === 'active'
-                            ? 'bg-emerald-400'
-                            : member.status === 'focusing'
-                            ? 'bg-[#ffb110]'
-                            : 'bg-zinc-600'
-                        }`}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="pt-1.5 border-t border-zinc-800/80 text-[10px] text-zinc-500 flex justify-between">
-                <span>Roster Filter</span>
-                <span className="font-mono text-blue-400">All Online</span>
-              </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
           </div>
 
@@ -304,83 +271,93 @@ export const WorkspaceHomePage: React.FC = () => {
               RIGHT MAIN AREA: PIPELINE + PLAIN TEXT 'TASK'
           --------------------------------------------------- */}
           <div className="flex-1 min-w-0 space-y-3">
-            {/* 2. TOP-RIGHT CARD: WORKFLOW PIPELINE TRACKER */}
+            {/* 2. TOP-RIGHT CARD: TASK PROGRESS */}
             <div className="bg-zinc-900 border border-zinc-800 rounded-[12px] px-4 py-3 shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center space-x-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                   <h2 className="text-xs font-semibold tracking-tight text-zinc-200">
-                    Workflow Pipeline
+                    Tasks
                   </h2>
                 </div>
-              </div>
-
-              {/* Connected Step Pipeline Nodes (✓) -> ( ) -> ( ) -> ( ) */}
-              <div className="relative py-1">
-                <div className="absolute left-4 right-4 top-4 h-[2px] bg-zinc-800 -z-0" />
-
-                <div className="flex items-center justify-between relative z-10">
-                  {stages.map((stage, idx) => {
-                    const isCompleted = stage.status === 'completed';
-                    const isActive = stage.status === 'active';
-
-                    return (
-                      <div
-                        key={stage.id}
-                        className="flex-1 flex flex-col items-center text-center select-none"
+                <div className="flex items-center gap-2">
+                  {import.meta.env.DEV && (
+                    <>
+                      {devError && <span className="text-[10px] text-red-300">{devError}</span>}
+                      <button
+                        type="button"
+                        onClick={handleDevAdvance}
+                        disabled={isAdvancing || roundStatus === null || roundStatus === 'completed'}
+                        title="Development only: skip to the next task"
+                        className="px-2 py-0.5 rounded-md border border-dashed border-amber-500/60 text-amber-400 hover:bg-amber-500/10 text-[10px] font-mono transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                       >
-                        {/* Circular Node */}
-                        <div
-                          className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
-                            isCompleted
-                              ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-500/20'
-                              : isActive
-                              ? 'bg-zinc-900 border-2 border-blue-500 text-blue-400 ring-2 ring-blue-500/30'
-                              : 'bg-zinc-900 border-2 border-zinc-700 text-zinc-500'
-                          }`}
-                        >
-                          {isCompleted ? (
-                            <Check className="w-4 h-4 stroke-[2.5]" />
-                          ) : isActive ? (
-                            <span className="w-2 h-2 rounded-full bg-blue-400" />
-                          ) : (
-                            <span className="text-[10px] font-semibold">{stage.id}</span>
-                          )}
-                        </div>
-
-                        {/* Stage Label */}
-                        <p
-                          className={`text-[11px] font-medium mt-1 tracking-tight truncate max-w-[120px] ${
-                            isActive
-                              ? 'text-blue-400 font-semibold'
-                              : isCompleted
-                              ? 'text-zinc-200'
-                              : 'text-zinc-500'
-                          }`}
-                        >
-                          {stage.label}
-                        </p>
-
-                        {/* Arrow separator */}
-                        {idx < stages.length - 1 && (
-                          <div className="hidden md:flex absolute -right-2 top-2 text-zinc-700 pointer-events-none">
-                            <ArrowRight className="w-3.5 h-3.5 opacity-60" />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                        {isAdvancing ? 'Skipping…' : 'DEV · Next task →'}
+                      </button>
+                    </>
+                  )}
+                  <span className="text-[10px] text-zinc-500 font-mono">
+                    {completedTasks} / {TASKS.length} completed
+                  </span>
                 </div>
               </div>
+
+              <ol className="relative flex items-start justify-between py-1">
+                <div aria-hidden="true" className="absolute left-[8%] right-[8%] top-[18px] h-[2px] bg-zinc-800" />
+                {TASKS.map((label, idx) => {
+                  const isCompleted = idx < completedTasks;
+                  const isActive = idx === completedTasks;
+                  return (
+                    <li
+                      key={label}
+                      aria-current={isActive ? 'step' : undefined}
+                      className="relative flex-1 flex flex-col items-center text-center select-none min-w-0"
+                    >
+                      <div
+                        className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
+                          isCompleted
+                            ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-500/20'
+                            : isActive
+                            ? 'bg-zinc-900 border-2 border-blue-500 text-blue-400 ring-2 ring-blue-500/30'
+                            : 'bg-zinc-900 border-2 border-zinc-700 text-zinc-500'
+                        }`}
+                      >
+                        {isCompleted ? (
+                          <Check aria-label="Completed" className="w-4 h-4 stroke-[2.5]" />
+                        ) : (
+                          <span className="text-[10px] font-semibold">{idx + 1}</span>
+                        )}
+                      </div>
+                      <p
+                        className={`text-[11px] font-medium mt-1 tracking-tight truncate max-w-full px-1 ${
+                          isActive ? 'text-blue-400 font-semibold' : isCompleted ? 'text-zinc-200' : 'text-zinc-500'
+                        }`}
+                      >
+                        {label}
+                      </p>
+                    </li>
+                  );
+                })}
+              </ol>
             </div>
 
-            <TaskOrientationGenerator
-              onStartTimer={() => {
-                setTimerSeconds(0);
-                setIsRunning(true);
-              }}
-              teamId={currentTeamId}
-            />
+            {roundStatus === 'round3' || roundStatus === 'completed' ? (
+              <Round3PoseRelay
+                key={roundStatus}
+                alreadyCompleted={roundStatus === 'completed'}
+                onCompleted={() => setRoundStatus('completed')}
+              />
+            ) : roundStatus === 'round2' ? (
+              <Round2WordEntry onCompleted={() => setTimeout(() => setRoundStatus('round3'), 1500)} />
+            ) : (
+              <TaskOrientationGenerator
+                onStartTimer={() => {
+                  setTimerSeconds(0);
+                  setIsRunning(true);
+                }}
+                teamId={currentTeamId}
+                onRound1Complete={() => setTimeout(() => setRoundStatus('round2'), 1500)}
+              />
+            )}
           </div>
         </div>
       </main>
