@@ -11,6 +11,7 @@ import {
   Sparkles,
   Users,
 } from 'lucide-react';
+import { TaskOrientationGenerator } from '../components/TaskOrientationGenerator.js';
 
 interface PipelineStage {
   id: number;
@@ -414,13 +415,9 @@ export const WorkspaceHomePage: React.FC = () => {
             </div>
 
             {/* --------------------------------------------------
-                4. BOTTOM-RIGHT: PLAIN TEXT TASK CARD (Black Theme)
+                4. BOTTOM-RIGHT: TASK ORIENTATION GENERATOR PANEL
             --------------------------------------------------- */}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-[12px] p-8 min-h-[480px] flex items-center justify-center shadow-sm">
-              <span className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-zinc-100 select-none">
-                Task
-              </span>
-            </div>
+            <TaskOrientationGenerator />
           </div>
         </div>
       </main>

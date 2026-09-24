@@ -35,3 +35,30 @@
     background: #3f3f46;
   }
 }
+
+@keyframes spin-clockwise {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes spin-anticlockwise {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(-360deg);
+  }
+}
+
+.animate-spin-cw {
+  animation: spin-clockwise 0.6s ease forwards;
+}
+
+.animate-spin-ccw {
+  animation: spin-anticlockwise 0.6s ease forwards;
+}
+
