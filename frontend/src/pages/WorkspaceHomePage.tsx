@@ -2,9 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.js';
 import {
   Clock,
-  Play,
-  Pause,
-  RotateCcw,
   Check,
   LogOut,
   ArrowRight,
@@ -50,12 +47,6 @@ export const WorkspaceHomePage: React.FC = () => {
     };
   }, [isRunning]);
 
-  const handleToggleTimer = () => setIsRunning(!isRunning);
-
-  const handleResetTimer = () => {
-    setIsRunning(false);
-    setTimerSeconds(0);
-  };
 
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60)
@@ -190,7 +181,7 @@ export const WorkspaceHomePage: React.FC = () => {
               Slim, compact width (lg:w-[240px])
           --------------------------------------------------- */}
           <div className="w-full lg:w-[240px] shrink-0 space-y-3">
-            {/* 1. TIMER CARD (Initialized at 00:00, Idle on load) */}
+            {/* 1. TIMER CARD (Synchronized with Task Orientation Generator) */}
             <div className="bg-zinc-900 border border-zinc-800 rounded-[12px] p-3 space-y-2 shadow-sm">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-1.5">
@@ -200,58 +191,27 @@ export const WorkspaceHomePage: React.FC = () => {
                   </h2>
                 </div>
                 <span
-                  className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${
+                  className={`text-[10px] font-medium px-2 py-0.5 rounded-full border inline-flex items-center space-x-1 ${
                     isRunning
                       ? 'bg-blue-950/70 text-blue-400 border-blue-800/40'
                       : 'bg-zinc-950 text-zinc-500 border-zinc-800'
                   }`}
                 >
-                  {isRunning ? 'Active' : 'Standby'}
+                  {isRunning && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse mr-1" />
+                  )}
+                  <span>{isRunning ? 'Active' : 'Standby'}</span>
                 </span>
               </div>
 
-              {/* Digital Display (Shows 00:00 on load) */}
-              <div className="text-center py-1">
-                <div className="font-mono text-3xl font-bold tracking-tight text-white">
+              {/* Digital Display (Starts at 00:00, starts ticking on Generate click) */}
+              <div className="text-center py-2.5 bg-zinc-950/60 rounded-lg border border-zinc-800/60">
+                <div className="font-mono text-3xl font-bold tracking-tight text-white tabular-nums">
                   {formatTime(timerSeconds)}
                 </div>
-                <p className="text-[10px] text-zinc-500 mt-0.5">
-                  {isRunning ? 'Session in progress' : 'Waiting for host'}
+                <p className="text-[10px] text-zinc-500 mt-1">
+                  {isRunning ? 'Round session in progress' : 'Starts on task generation'}
                 </p>
-              </div>
-
-              {/* Timer Controls */}
-              <div className="flex items-center space-x-1.5 pt-0.5">
-                <button
-                  type="button"
-                  onClick={handleToggleTimer}
-                  className={`flex-1 flex items-center justify-center space-x-1.5 py-1.5 px-2 rounded-[6px] text-white text-[11px] font-medium transition-colors ${
-                    isRunning
-                      ? 'bg-amber-600 hover:bg-amber-500'
-                      : 'bg-blue-600 hover:bg-blue-500'
-                  }`}
-                >
-                  {isRunning ? (
-                    <>
-                      <Pause className="w-3 h-3" />
-                      <span>Pause</span>
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-3 h-3 fill-current" />
-                      <span>Start</span>
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleResetTimer}
-                  className="p-1.5 rounded-[6px] bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/80 transition-colors"
-                  title="Reset timer to 00:00"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                </button>
               </div>
             </div>
 
@@ -414,10 +374,13 @@ export const WorkspaceHomePage: React.FC = () => {
               </div>
             </div>
 
-            {/* --------------------------------------------------
-                4. BOTTOM-RIGHT: TASK ORIENTATION GENERATOR PANEL
-            --------------------------------------------------- */}
-            <TaskOrientationGenerator />
+            <TaskOrientationGenerator
+              onStartTimer={() => {
+                setTimerSeconds(0);
+                setIsRunning(true);
+              }}
+              teamId={currentTeamId}
+            />
           </div>
         </div>
       </main>

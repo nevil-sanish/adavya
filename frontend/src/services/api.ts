@@ -11,7 +11,6 @@ import {
   TeamTaskspace,
 } from '../types/auth.js';
 import {
-  DEFAULT_TASKSPACES,
   validateTeamIdFormat,
   generateTeamId,
 } from '../schemas/workspace.schema.js';
@@ -149,83 +148,112 @@ export async function createTeamTaskspace(request: CreateTeamRequest): Promise<O
     throw new AuthApiError('Team name is required.', 'VALIDATION_ERROR', 400);
   }
 
-  const generatedTeamId = generateTeamId(rawName);
-
-  await simulateDelay(300);
-
   const stored = localStorage.getItem(STORAGE_KEY_USER);
   if (!stored) {
     throw new AuthApiError('Session not found. Please log in again.', 'SESSION_NOT_FOUND', 401);
   }
 
   const currentUser = JSON.parse(stored) as User;
+  const generatedTeamId = generateTeamId(rawName);
   const now = new Date().toISOString();
-  const updatedUser: User = {
-    ...currentUser,
-    hasOnboarded: true,
-    teamId: generatedTeamId,
-    taskspaceName: rawName,
-    updatedAt: now,
-  };
 
-  const newTaskspace: TeamTaskspace = {
+  let createdTaskspace: TeamTaskspace = {
     teamId: generatedTeamId,
     name: rawName,
     ownerEmail: currentUser.email,
     membersCount: 1,
+    createdBy: {
+      id: currentUser.id,
+      googleId: currentUser.googleId,
+      email: currentUser.email,
+      name: currentUser.name,
+    },
+    members: [
+      {
+        id: currentUser.id,
+        googleId: currentUser.googleId,
+        email: currentUser.email,
+        name: currentUser.name,
+        role: 'owner',
+        joinedAt: now,
+      },
+    ],
     createdAt: now,
+    updatedAt: now,
   };
 
-  // 1. Direct Client-side Firestore persistence
-  try {
-    await setDoc(doc(db, 'teams', generatedTeamId), newTaskspace, { merge: true });
-    if (currentUser.googleId) {
-      await setDoc(
-        doc(db, 'users', currentUser.googleId),
-        {
-          hasOnboarded: true,
-          teamId: generatedTeamId,
-          taskspaceName: rawName,
-          updatedAt: now,
-        },
-        { merge: true }
-      );
-    }
-    console.log(`[Firestore Client] Team ${generatedTeamId} saved and user updated`);
-  } catch (fsErr) {
-    console.warn('[Firestore Client] Team persistence warning:', fsErr);
-  }
+  let backendSaved = false;
 
-  // 2. Backend API persistence
+  // 1. Call Backend API (Backend saves to Firestore with exact teamId and user details)
   if (API_BASE_URL) {
     try {
-      await fetch(`${API_BASE_URL}/api/teams/create`, {
+      const res = await fetch(`${API_BASE_URL}/api/teams/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          teamId: generatedTeamId, // Pass identical ID to prevent duplicate team instances
           teamName: rawName,
           userEmail: currentUser.email,
           googleId: currentUser.googleId,
+          userName: currentUser.name,
+          userId: currentUser.id,
         }),
       });
-      console.log(`[Backend API] Team created via backend API`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.taskspace) {
+          createdTaskspace = data.taskspace;
+        }
+        backendSaved = true;
+        console.log(`[Backend API] Team created with user details: ${createdTaskspace.teamId}`);
+      }
     } catch (apiErr) {
       console.warn('[Backend API] Team create API call warning:', apiErr);
     }
   }
 
+  // 2. Client fallback only if backend was unreachable
+  if (!backendSaved) {
+    try {
+      await setDoc(doc(db, 'teams', createdTaskspace.teamId), createdTaskspace, { merge: true });
+      if (currentUser.googleId) {
+        await setDoc(
+          doc(db, 'users', currentUser.googleId),
+          {
+            hasOnboarded: true,
+            teamId: createdTaskspace.teamId,
+            taskspaceName: rawName,
+            updatedAt: now,
+          },
+          { merge: true }
+        );
+      }
+      console.log(`[Firestore Client Fallback] Team ${createdTaskspace.teamId} saved with user details`);
+    } catch (fsErr) {
+      console.warn('[Firestore Client] Team persistence warning:', fsErr);
+    }
+  }
+
+  const updatedUser: User = {
+    ...currentUser,
+    hasOnboarded: true,
+    teamId: createdTaskspace.teamId,
+    taskspaceName: rawName,
+    updatedAt: now,
+  };
+
   localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(updatedUser));
 
   return {
     user: updatedUser,
-    taskspace: newTaskspace,
-    message: `Team Taskspace created with ID: ${generatedTeamId}`,
+    taskspace: createdTaskspace,
+    message: `Team Taskspace created with ID: ${createdTaskspace.teamId}`,
   };
 }
 
 /**
  * Option 2: Join an existing Team Taskspace
- * Validates Team ID, persists to Firestore and backend, and links the user.
+ * Validates Team ID, persists member user detail, and links the user.
  */
 export async function joinTeamTaskspace(request: JoinTeamRequest): Promise<OnboardingResponse> {
   const validation = validateTeamIdFormat(request.teamId);
@@ -235,15 +263,6 @@ export async function joinTeamTaskspace(request: JoinTeamRequest): Promise<Onboa
 
   const normalizedTeamId = validation.normalizedValue;
 
-  await simulateDelay(300);
-
-  // Check known taskspaces or accept properly formatted IDs
-  const matched = DEFAULT_TASKSPACES.find(
-    (t) => t.teamId.toUpperCase() === normalizedTeamId
-  );
-
-  const taskspaceName = matched ? matched.name : `Taskspace (${normalizedTeamId})`;
-
   const stored = localStorage.getItem(STORAGE_KEY_USER);
   if (!stored) {
     throw new AuthApiError('Session not found. Please log in again.', 'SESSION_NOT_FOUND', 401);
@@ -251,58 +270,83 @@ export async function joinTeamTaskspace(request: JoinTeamRequest): Promise<Onboa
 
   const currentUser = JSON.parse(stored) as User;
   const now = new Date().toISOString();
-  const updatedUser: User = {
-    ...currentUser,
-    hasOnboarded: true,
+
+  let joinedTaskspace: TeamTaskspace = {
     teamId: normalizedTeamId,
-    taskspaceName,
+    name: `Taskspace (${normalizedTeamId})`,
+    membersCount: 2,
+    members: [
+      {
+        id: currentUser.id,
+        googleId: currentUser.googleId,
+        email: currentUser.email,
+        name: currentUser.name,
+        role: 'member',
+        joinedAt: now,
+      },
+    ],
+    createdAt: now,
     updatedAt: now,
   };
 
-  const joinedTaskspace: TeamTaskspace = {
-    teamId: normalizedTeamId,
-    name: taskspaceName,
-    membersCount: (matched?.membersCount || 1) + 1,
-    createdAt: now,
-  };
+  let backendSaved = false;
 
-  // 1. Direct Client-side Firestore persistence
-  try {
-    await setDoc(doc(db, 'teams', normalizedTeamId), joinedTaskspace, { merge: true });
-    if (currentUser.googleId) {
-      await setDoc(
-        doc(db, 'users', currentUser.googleId),
-        {
-          hasOnboarded: true,
-          teamId: normalizedTeamId,
-          taskspaceName,
-          updatedAt: now,
-        },
-        { merge: true }
-      );
-    }
-    console.log(`[Firestore Client] Joined team ${normalizedTeamId} and updated user`);
-  } catch (fsErr) {
-    console.warn('[Firestore Client] Team join persistence warning:', fsErr);
-  }
-
-  // 2. Backend API persistence
+  // 1. Call Backend API to update team and user in Firestore
   if (API_BASE_URL) {
     try {
-      await fetch(`${API_BASE_URL}/api/teams/join`, {
+      const res = await fetch(`${API_BASE_URL}/api/teams/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           teamId: normalizedTeamId,
           userEmail: currentUser.email,
           googleId: currentUser.googleId,
+          userName: currentUser.name,
+          userId: currentUser.id,
         }),
       });
-      console.log(`[Backend API] Joined team via backend API`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.taskspace) {
+          joinedTaskspace = data.taskspace;
+        }
+        backendSaved = true;
+        console.log(`[Backend API] Joined team with user detail: ${normalizedTeamId}`);
+      }
     } catch (apiErr) {
       console.warn('[Backend API] Team join API call warning:', apiErr);
     }
   }
+
+  // 2. Client fallback only if backend was unreachable
+  if (!backendSaved) {
+    try {
+      await setDoc(doc(db, 'teams', normalizedTeamId), joinedTaskspace, { merge: true });
+      if (currentUser.googleId) {
+        await setDoc(
+          doc(db, 'users', currentUser.googleId),
+          {
+            hasOnboarded: true,
+            teamId: normalizedTeamId,
+            taskspaceName: joinedTaskspace.name,
+            updatedAt: now,
+          },
+          { merge: true }
+        );
+      }
+      console.log(`[Firestore Client Fallback] Joined team ${normalizedTeamId} with user details`);
+    } catch (fsErr) {
+      console.warn('[Firestore Client] Team join persistence warning:', fsErr);
+    }
+  }
+
+  const updatedUser: User = {
+    ...currentUser,
+    hasOnboarded: true,
+    teamId: normalizedTeamId,
+    taskspaceName: joinedTaskspace.name,
+    updatedAt: now,
+  };
 
   localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(updatedUser));
 

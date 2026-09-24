@@ -16,12 +16,29 @@ export interface AuthResponse {
   token: string;
 }
 
+export interface TeamMember {
+  id?: string;
+  googleId: string;
+  email: string;
+  name: string;
+  role: 'owner' | 'member';
+  joinedAt: string;
+}
+
 export interface TeamTaskspace {
   teamId: string;
   name: string;
   ownerEmail?: string;
   membersCount: number;
+  createdBy?: {
+    id?: string;
+    googleId: string;
+    email: string;
+    name: string;
+  };
+  members?: TeamMember[];
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CreateTeamRequest {
@@ -95,4 +112,30 @@ export interface OrientationState {
   players: PlayerOrientation[];
   generatedAt?: string;
   generationCount: number;
+}
+
+export interface RoundPlayer {
+  id: string;
+  name: string;
+  orientation: 0 | 1;
+  orientationLabel: 'clockwise' | 'anticlockwise';
+}
+
+export interface RoundInstance {
+  roundId?: string;
+  roundNumber: number;
+  teamId: string;
+  orientation: {
+    player1: 0 | 1;
+    player2: 0 | 1;
+    player3: 0 | 1;
+  };
+  orientations: (0 | 1)[];
+  player1: 0 | 1;
+  player2: 0 | 1;
+  player3: 0 | 1;
+  players: RoundPlayer[];
+  timerStarted: boolean;
+  createdAt: string;
+  updatedAt?: string;
 }

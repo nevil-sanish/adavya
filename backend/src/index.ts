@@ -48,6 +48,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 app.use('/api/auth', authRouter);
 app.use('/api/teams', teamRouter);
 app.use('/api/tasks', taskRouter);
+app.use('/api/rounds', taskRouter);
 
 // 404 handler
 app.use((req: Request, res: Response) => {

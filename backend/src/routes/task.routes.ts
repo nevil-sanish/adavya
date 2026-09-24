@@ -7,7 +7,10 @@ import {
   SpecReviewTaskData,
   CodeReviewTaskData,
   DeploymentTaskData,
+  RoundInstance,
+  RoundPlayer,
 } from '../types/index.js';
+import { getDb } from '../config/firebase.js';
 
 export const taskRouter = Router();
 
@@ -430,4 +433,116 @@ taskRouter.post('/timer', (req, res): void => {
     message: `Timer updated (${action || 'sync'})`,
     timer: timerState,
   });
+});
+
+const recordRoundSchema = z.object({
+  roundId: z.string().optional(),
+  teamId: z.string().min(1, 'Team ID is required'),
+  roundNumber: z.number().int().min(1).optional(),
+  player1: z.union([z.literal(0), z.literal(1)]),
+  player2: z.union([z.literal(0), z.literal(1)]),
+  player3: z.union([z.literal(0), z.literal(1)]),
+  timerSeconds: z.number().optional().default(0),
+});
+
+/**
+ * POST /api/tasks/round
+ * Creates a new round instance in the Firestore collection 'rounds'
+ * Clockwise: 1, Anticlockwise: 0
+ */
+taskRouter.post('/round', async (req, res): Promise<void> => {
+  const result = recordRoundSchema.safeParse(req.body);
+  if (!result.success) {
+    res.status(400).json({
+      error: 'VALIDATION_ERROR',
+      message: result.error.errors[0]?.message || 'Invalid round payload',
+    });
+    return;
+  }
+
+  const { roundId: customRoundId, teamId, player1, player2, player3 } = result.data;
+  const now = new Date().toISOString();
+  const db = getDb();
+
+  // Calculate roundNumber if not provided by counting existing rounds for team
+  let roundNumber = result.data.roundNumber;
+  if (!roundNumber) {
+    try {
+      const snap = await db.collection('rounds').where('teamId', '==', teamId).get();
+      roundNumber = snap.size + 1;
+    } catch {
+      roundNumber = 1;
+    }
+  }
+
+  const roundDocId = customRoundId || `${teamId}_round_${roundNumber}_${Date.now()}`;
+
+  const players: RoundPlayer[] = [
+    {
+      id: 'player-1',
+      name: 'Player 1',
+      orientation: player1,
+      orientationLabel: player1 === 1 ? 'clockwise' : 'anticlockwise',
+    },
+    {
+      id: 'player-2',
+      name: 'Player 2',
+      orientation: player2,
+      orientationLabel: player2 === 1 ? 'clockwise' : 'anticlockwise',
+    },
+    {
+      id: 'player-3',
+      name: 'Player 3',
+      orientation: player3,
+      orientationLabel: player3 === 1 ? 'clockwise' : 'anticlockwise',
+    },
+  ];
+
+  const roundInstance: RoundInstance = {
+    roundId: roundDocId,
+    roundNumber,
+    teamId,
+    orientation: {
+      player1,
+      player2,
+      player3,
+    },
+    orientations: [player1, player2, player3],
+    player1,
+    player2,
+    player3,
+    players,
+    timerStarted: true,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  try {
+    await db.collection('rounds').doc(roundDocId).set(roundInstance, { merge: true });
+    console.log(`[Firestore] New round instance created for team ${teamId} (Round ${roundNumber}) in 'rounds/${roundDocId}'`);
+  } catch (err) {
+    console.error('[Firestore] Error saving round instance:', err);
+    res.status(500).json({ error: 'DB_ERROR', message: 'Failed to persist round to Firestore' });
+    return;
+  }
+
+  res.status(201).json({
+    message: `Round ${roundNumber} created successfully`,
+    round: roundInstance,
+  });
+});
+
+/**
+ * GET /api/tasks/rounds/:teamId
+ */
+taskRouter.get('/rounds/:teamId', async (req, res): Promise<void> => {
+  const { teamId } = req.params;
+  try {
+    const db = getDb();
+    const snap = await db.collection('rounds').where('teamId', '==', teamId).get();
+    const rounds = snap.docs.map((doc) => doc.data() as RoundInstance);
+    res.status(200).json({ rounds, total: rounds.length });
+  } catch (err) {
+    res.status(500).json({ error: 'DB_ERROR', message: 'Failed to fetch rounds from Firestore' });
+  }
 });
