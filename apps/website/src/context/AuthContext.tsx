@@ -1,168 +1,94 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { User } from '../types/auth.js';
-import {
-  authenticateWithGoogle,
-  getCurrentSession,
-  logoutSession,
-  createTeamTaskspace,
-  joinTeamTaskspace,
-  AuthApiError,
-} from '../services/api.js';
-import { signInWithFirebaseGoogle, signOutFirebase } from '../services/firebase.js';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { ApiError, type Session } from '@adavya/shared';
+import { api } from '../services/api.js';
+import { auth, isInstitutionEmail, signInWithGoogle, signOutFirebase } from '../services/firebase.js';
 
 interface AuthContextType {
-  user: User | null;
+  session: Session | null;
   loading: boolean;
   authError: string | null;
-  loginWithGoogleToken: (idToken: string) => Promise<boolean>;
-  loginWithFirebaseGoogle: () => Promise<boolean>;
-  createTeam: (teamName: string) => Promise<boolean>;
-  joinTeam: (teamId: string) => Promise<boolean>;
+  login: () => Promise<boolean>;
   logout: () => Promise<void>;
+  /** Reloads the profile after a team or name change. */
+  refresh: () => Promise<void>;
   clearError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function message(err: unknown, fallback: string): string {
+  return err instanceof ApiError || err instanceof Error ? err.message : fallback;
+}
+
+/**
+ * Firebase Auth persists the sign-in; on every load the server profile is
+ * fetched again, restoring competition, team, role and slot.
+ */
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
-    async function initSession() {
-      try {
-        const sessionUser = await getCurrentSession();
-        if (isMounted) setUser(sessionUser);
-      } catch {
-        if (isMounted) setUser(null);
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    }
-    initSession();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  useEffect(
+    () =>
+      onAuthStateChanged(auth, async (user) => {
+        if (!user) {
+          setSession(null);
+          setLoading(false);
+          return;
+        }
+        if (!user.emailVerified || !isInstitutionEmail(user.email)) {
+          await signOutFirebase().catch(() => {});
+          return;
+        }
+        try {
+          setSession(await api.session());
+        } catch (err) {
+          setAuthError(message(err, 'Could not restore your session.'));
+          setSession(null);
+        } finally {
+          setLoading(false);
+        }
+      }),
+    []
+  );
 
-  const clearError = useCallback(() => {
-    setAuthError(null);
-  }, []);
-
-  const loginWithGoogleToken = useCallback(async (idToken: string): Promise<boolean> => {
-    setLoading(true);
-    setAuthError(null);
-    try {
-      const response = await authenticateWithGoogle(idToken);
-      setUser(response.user);
-      return true;
-    } catch (err: unknown) {
-      const message =
-        err instanceof AuthApiError
-          ? err.message
-          : err instanceof Error
-          ? err.message
-          : 'Authentication failed.';
-      setAuthError(message);
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const createTeam = useCallback(async (teamName: string): Promise<boolean> => {
-    setLoading(true);
+  const login = useCallback(async () => {
     setAuthError(null);
     try {
-      const response = await createTeamTaskspace({ teamName });
-      setUser(response.user);
+      const idToken = await signInWithGoogle();
+      setSession(await api.login(idToken));
       return true;
-    } catch (err: unknown) {
-      const message =
-        err instanceof AuthApiError
-          ? err.message
-          : err instanceof Error
-          ? err.message
-          : 'Failed to create team taskspace.';
-      setAuthError(message);
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const joinTeam = useCallback(async (teamId: string): Promise<boolean> => {
-    setLoading(true);
-    setAuthError(null);
-    try {
-      const response = await joinTeamTaskspace({ teamId });
-      setUser(response.user);
-      return true;
-    } catch (err: unknown) {
-      const message =
-        err instanceof AuthApiError
-          ? err.message
-          : err instanceof Error
-          ? err.message
-          : 'Failed to join team taskspace.';
-      setAuthError(message);
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const loginWithFirebaseGoogle = useCallback(async (): Promise<boolean> => {
-    setAuthError(null);
-    try {
-      const response = await signInWithFirebaseGoogle();
-      setUser(response.user);
-      return true;
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'Firebase Google authentication failed.';
-      setAuthError(message);
+    } catch (err) {
+      setAuthError(message(err, 'Sign-in failed.'));
+      await signOutFirebase().catch(() => {});
       return false;
     }
   }, []);
 
   const logout = useCallback(async () => {
-    setLoading(true);
+    await signOutFirebase().catch(() => {});
+    setSession(null);
+  }, []);
+
+  const refresh = useCallback(async () => {
     try {
-      await logoutSession();
-      await signOutFirebase().catch(() => {});
-      setUser(null);
-      setAuthError(null);
-    } finally {
-      setLoading(false);
+      setSession(await api.session());
+    } catch (err) {
+      setAuthError(message(err, 'Could not refresh your profile.'));
     }
   }, []);
 
+  const clearError = useCallback(() => setAuthError(null), []);
+
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        authError,
-        loginWithGoogleToken,
-        loginWithFirebaseGoogle,
-        createTeam,
-        joinTeam,
-        logout,
-        clearError,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={{ session, loading, authError, login, logout, refresh, clearError }}>{children}</AuthContext.Provider>
   );
 };
 
 export function useAuth(): AuthContextType {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 }

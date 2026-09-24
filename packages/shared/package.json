@@ -1,0 +1,13 @@
+{
+  "name": "@adavya/shared",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Dependency-free types, API client and sensor logic shared by the captain website and player app.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --test tests/"
+  }
+}

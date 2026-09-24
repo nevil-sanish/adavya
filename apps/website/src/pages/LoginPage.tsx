@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext.js';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle, Loader2, X } from 'lucide-react';
+import { EMAIL_DOMAIN } from '../services/firebase.js';
 
 export const LoginPage: React.FC = () => {
-  const { loginWithFirebaseGoogle, authError, clearError } = useAuth();
+  const { login, authError, clearError } = useAuth();
   const [isVerifying, setIsVerifying] = useState(false);
   const navigate = useNavigate();
 
@@ -13,7 +14,7 @@ export const LoginPage: React.FC = () => {
     clearError();
     setIsVerifying(true);
     try {
-      if (await loginWithFirebaseGoogle()) navigate('/onboarding', { replace: true });
+      if (await login()) navigate('/', { replace: true });
     } finally {
       setIsVerifying(false);
     }
@@ -23,9 +24,10 @@ export const LoginPage: React.FC = () => {
     <main className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center px-6">
       <div className="w-full max-w-xs">
         <header className="mb-6 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">Log in</h1>
+          <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Team Challenge · Captain</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight">Log in</h1>
           <p className="mt-2 text-sm text-zinc-400">
-            Use your IIIT Kottayam account (<span className="text-zinc-300">@iiitkottayam.ac.in</span>)
+            Use your institute account (<span className="text-zinc-300">@{EMAIL_DOMAIN}</span>)
           </p>
         </header>
         {authError && (

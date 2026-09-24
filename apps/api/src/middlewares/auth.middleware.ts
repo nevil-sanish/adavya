@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyFirebaseIdToken } from '../config/firebase.js';
+import { adminEmails, allowedEmailDomain, isAllowedEmail } from '../config/env.js';
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -45,10 +46,10 @@ export async function requireAuth(
       return;
     }
 
-    if (!decoded.email_verified || !/^[^@\s]+@iiitkottayam\.ac\.in$/.test(email)) {
+    if (!decoded.email_verified || !isAllowedEmail(email)) {
       res.status(403).json({
         error: 'INSTITUTION_EMAIL_REQUIRED',
-        message: 'Please sign in with your verified @iiitkottayam.ac.in Google account.',
+        message: `Please sign in with your verified @${allowedEmailDomain()} Google account.`,
       });
       return;
     }
@@ -68,4 +69,13 @@ export async function requireAuth(
       message,
     });
   }
+}
+
+/** Must run after requireAuth. Admins are listed by email in ADMIN_EMAILS. */
+export function requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
+  if (!req.user || !adminEmails().has(req.user.email)) {
+    res.status(403).json({ error: 'ADMIN_ONLY', message: 'Administrator access required.' });
+    return;
+  }
+  next();
 }

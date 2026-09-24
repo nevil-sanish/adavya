@@ -1,0 +1,12 @@
+[
+  {"locationId": "L01", "name": "Main Gate", "latitude": 9.7551, "longitude": 76.6502, "radiusMeters": 25, "letter": "A", "hint": "I open every morning and close every night; everyone passes me, yet no one stays. Find the place where the campus begins."},
+  {"locationId": "L02", "name": "Basketball Court", "latitude": 9.7556, "longitude": 76.6496, "radiusMeters": 25, "letter": "R", "hint": "Ten feet up, a ring with no finger; bounce, jump, and shoot. Stand where the hoops hang."},
+  {"locationId": "L03", "name": "Library", "latitude": 9.7548, "longitude": 76.6491, "radiusMeters": 25, "letter": "T", "hint": "Whispers only, shelves of paper minds. Find the quiet house of books."},
+  {"locationId": "L04", "name": "Admin Block", "latitude": 9.7542, "longitude": 76.6499, "radiusMeters": 25, "letter": "M", "hint": "Forms, stamps and signatures live here; every file starts and ends at my desk."},
+  {"locationId": "L05", "name": "Old Library", "latitude": 9.7553, "longitude": 76.6512, "radiusMeters": 30, "letter": "K", "hint": "Behind the old library, where stories are older than the students reading them."},
+  {"locationId": "L06", "name": "Cafeteria", "latitude": 9.7544, "longitude": 76.6508, "radiusMeters": 25, "letter": "O", "hint": "Steam rises, trays clatter and tea is always brewing. Stand beside the cafeteria."},
+  {"locationId": "L07", "name": "Hostel Entrance", "latitude": 9.756, "longitude": 76.6505, "radiusMeters": 25, "letter": "P", "hint": "I am home for many but a house for none; lights out at eleven. Find the hostel door."},
+  {"locationId": "L08", "name": "Auditorium", "latitude": 9.7546, "longitude": 76.6486, "radiusMeters": 30, "letter": "E", "hint": "Seats in rows, a stage in front, applause behind the doors. Stand near the auditorium."},
+  {"locationId": "L09", "name": "Football Ground", "latitude": 9.7564, "longitude": 76.6492, "radiusMeters": 40, "letter": "S", "hint": "Grass, two goals and a whistle. Find the widest green on campus."},
+  {"locationId": "L10", "name": "Campus Entrance Garden", "latitude": 9.7539, "longitude": 76.6493, "radiusMeters": 25, "letter": "N", "hint": "Close to the main entrance, where flowers greet everyone who arrives."}
+]

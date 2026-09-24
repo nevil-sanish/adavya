@@ -10,3 +10,9 @@ build/
 *.pem
 
 .vite/
+
+# Firebase emulator output
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+.firebase/

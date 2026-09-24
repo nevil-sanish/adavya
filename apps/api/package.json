@@ -1,14 +1,19 @@
 {
   "name": "adavya-backend",
   "version": "1.0.0",
-  "description": "Backend API for Adavya Workspace & Agentic Intelligence Platform",
+  "description": "Trusted game API for the Team Challenge Platform",
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "setup": "npm run build && node dist/scripts/setup-competition.js",
+    "reset": "npm run build && node dist/scripts/reset-competition.js",
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "test:emulator": "npm --prefix ../../firebase exec -- firebase emulators:exec --only firestore --project demo-adavya --config ../../firebase.json \"npm test\"",
+    "rehearsal": "npm run build && node dist/scripts/rehearsal.js"
   },
   "keywords": [
     "adavya",

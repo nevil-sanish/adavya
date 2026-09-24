@@ -18,7 +18,10 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+
+    /* Shared package (source-only, see packages/shared) */
+    "paths": { "@adavya/shared": ["../../packages/shared/src/index.ts"] }
   },
-  "include": ["src"]
+  "include": ["src", "../../packages/shared/src"]
 }

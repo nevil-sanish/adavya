@@ -1,8 +1,11 @@
-import { Router, Response } from 'express';
+import { Router } from 'express';
 import { z } from 'zod';
-import { verifyFirebaseIdToken, getDb } from '../config/firebase.js';
+import { adminEmails, allowedEmailDomain, isAllowedEmail, activeCompetitionId } from '../config/env.js';
+import { getDb, verifyFirebaseIdToken } from '../config/firebase.js';
+import { route } from '../lib/http.js';
 import { requireAuth, AuthenticatedRequest } from '../middlewares/auth.middleware.js';
-import { User, AuthResponse } from '../types/index.js';
+import { loadOrCreateProfile, updateDisplayName } from '../services/team.service.js';
+import type { UserDoc } from '../game/types.js';
 
 export const authRouter = Router();
 
@@ -10,12 +13,31 @@ const googleAuthSchema = z.object({
   idToken: z.string().min(1, 'idToken is required'),
 });
 
-// In-memory fallback user store
-const usersStore = new Map<string, User>();
+/** The fields a client may see about its own profile. */
+function publicProfile(user: UserDoc) {
+  return {
+    uid: user.uid,
+    email: user.email,
+    displayName: user.displayName,
+    competitionId: user.competitionId,
+    teamId: user.teamId,
+    role: user.role,
+    slot: user.slot,
+  };
+}
+
+function session(user: UserDoc, email: string) {
+  return {
+    user: publicProfile(user),
+    isAdmin: adminEmails().has(email),
+    activeCompetitionId: activeCompetitionId(),
+  };
+}
 
 /**
  * POST /api/auth/google
- * Validates Google/Firebase ID token with IIIT Kottayam email restriction and persists to Firestore
+ * Verifies the Firebase ID token, enforces the institutional domain, and loads or
+ * creates the persistent profile. An existing profile (team, role, slot) is never reset.
  */
 authRouter.post('/google', async (req, res): Promise<void> => {
   const parseResult = googleAuthSchema.safeParse(req.body);
@@ -27,10 +49,8 @@ authRouter.post('/google', async (req, res): Promise<void> => {
     return;
   }
 
-  const { idToken } = parseResult.data;
-
   try {
-    const decoded = await verifyFirebaseIdToken(idToken);
+    const decoded = await verifyFirebaseIdToken(parseResult.data.idToken);
     const email = decoded.email?.toLowerCase().trim();
 
     if (!email) {
@@ -41,52 +61,16 @@ authRouter.post('/google', async (req, res): Promise<void> => {
       return;
     }
 
-    if (!decoded.email_verified || !/^[^@\s]+@iiitkottayam\.ac\.in$/.test(email)) {
+    if (!decoded.email_verified || !isAllowedEmail(email)) {
       res.status(403).json({
         error: 'INSTITUTION_EMAIL_REQUIRED',
-        message: 'Please sign in with your verified @iiitkottayam.ac.in Google account.',
+        message: `Please sign in with your verified @${allowedEmailDomain()} Google account.`,
       });
       return;
     }
 
-    const now = new Date().toISOString();
-    const userId = `usr_${decoded.uid.substring(0, 10)}`;
-
-    // Create a new instance for the user with onboarding status false
-    const user: User = {
-      id: userId,
-      email,
-      name: decoded.name || email.split('@')[0],
-      googleId: decoded.uid,
-      hasOnboarded: false, // Always initialize to false upon login
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    // Persist new user instance to Firestore database (without merge, resetting onboarding state)
-    try {
-      const db = getDb();
-      await db.collection('users').doc(decoded.uid).set({
-        ...user,
-        lastLoginAt: now,
-      });
-      console.log(`[Firestore] New user instance created for ${email} with hasOnboarded=false in 'users/${decoded.uid}'`);
-    } catch (dbWriteErr) {
-      console.error('[Firestore] Failed to persist user to Firestore:', dbWriteErr);
-      throw new Error(
-        `Failed to save user to Firestore: ${dbWriteErr instanceof Error ? dbWriteErr.message : 'Unknown database error'}`
-      );
-    }
-
-    usersStore.set(email, user);
-
-    const response: AuthResponse = {
-      user,
-      isNewUser: true,
-      token: idToken,
-    };
-
-    res.status(200).json(response);
+    const user = await loadOrCreateProfile(getDb(), decoded.uid, email, decoded.name);
+    res.status(200).json(session(user, email));
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Google authentication failed.';
     res.status(401).json({
@@ -98,25 +82,28 @@ authRouter.post('/google', async (req, res): Promise<void> => {
 
 /**
  * GET /api/auth/me
- * Retrieves current session user
+ * Restores the session after refresh or re-login: identity, team, role and slot.
  */
-authRouter.get('/me', requireAuth, (req: AuthenticatedRequest, res: Response): void => {
-  if (!req.user) {
-    res.status(401).json({ error: 'UNAUTHORIZED' });
-    return;
-  }
+authRouter.get(
+  '/me',
+  requireAuth,
+  route(async (req: AuthenticatedRequest, res) => {
+    const user = await loadOrCreateProfile(getDb(), req.user!.uid, req.user!.email, req.user!.name);
+    res.status(200).json(session(user, req.user!.email));
+  })
+);
 
-  const user = usersStore.get(req.user.email) || {
-    id: `usr_${req.user.uid.substring(0, 10)}`,
-    email: req.user.email,
-    name: req.user.name || req.user.email.split('@')[0],
-    googleId: req.user.uid,
-    hasOnboarded: false,
-    createdAt: new Date().toISOString(),
-  };
-
-  res.status(200).json({ user });
-});
+/**
+ * PATCH /api/auth/me
+ * Changes the display name until the team is locked.
+ */
+authRouter.patch(
+  '/me',
+  requireAuth,
+  route(async (req: AuthenticatedRequest, res) => {
+    res.status(200).json(await updateDisplayName(getDb(), req.user!.uid, req.body?.displayName));
+  })
+);
 
 /**
  * POST /api/auth/logout

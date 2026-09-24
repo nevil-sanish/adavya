@@ -1,0 +1,91 @@
+rules_version = '2';
+
+// Coarse authorization only. All game logic (team membership, task progress,
+// scoring, ranking, hidden configuration) is written by the trusted API with the
+// Admin SDK, which bypasses these rules. Clients may only read what their role is
+// allowed to see and write their own presence heartbeat.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower().matches('^[^@]+@iiitkottayam[.]ac[.]in$');
+    }
+
+    function teamPath(cid, teamId) {
+      return /databases/$(database)/documents/competitions/$(cid)/teams/$(teamId);
+    }
+
+    function isMember(cid, teamId) {
+      return signedIn() && exists(/databases/$(database)/documents/competitions/$(cid)/teams/$(teamId)/members/$(request.auth.uid));
+    }
+
+    function isCaptain(cid, teamId) {
+      return signedIn() && get(teamPath(cid, teamId)).data.captainUid == request.auth.uid;
+    }
+
+    // Own profile: read only. Display-name edits go through the API so the lock is enforced.
+    match /users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /competitions/{cid} {
+      // Name, status, task order and scoring policy are public to competitors.
+      allow read: if signedIn();
+
+      match /taskDefinitions/{taskId} {
+        allow read: if signedIn();
+      }
+
+      match /teams/{teamId} {
+        allow read: if isMember(cid, teamId);
+
+        match /members/{uid} {
+          allow read: if isMember(cid, teamId);
+          // Presence heartbeat: a member may touch only their own connection fields,
+          // and lastSeenAt must be the server's request time.
+          allow update: if signedIn()
+            && request.auth.uid == uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isConnected', 'lastSeenAt'])
+            && request.resource.data.isConnected is bool
+            && request.resource.data.lastSeenAt == request.time;
+        }
+
+        // Captain-only summaries (score and ranks per task).
+        match /captain/{docId} {
+          allow read: if isCaptain(cid, teamId);
+        }
+
+        match /taskRuns/{taskId} {
+          // Status and run id only; progress and results live in role views.
+          allow read: if isMember(cid, teamId);
+
+          match /views/{viewId} {
+            allow read: if (viewId == 'captain' && isCaptain(cid, teamId))
+              || (viewId == request.auth.uid && isMember(cid, teamId));
+          }
+
+          // Task 2 captain data: hints, legitimately discovered letters, word attempts.
+          match /assignedLocations/{locationId} {
+            allow read: if taskId == 'task02' && isCaptain(cid, teamId);
+          }
+          match /discoveries/{locationId} {
+            allow read: if taskId == 'task02' && isCaptain(cid, teamId);
+          }
+          match /wordAttempts/{attemptId} {
+            allow read: if taskId == 'task02' && isCaptain(cid, teamId);
+          }
+
+          // events/{eventId} is server-only (idempotency log): no client access.
+        }
+
+        // private/{taskId} is server-only (hidden targets and assignments): no client access.
+      }
+
+      // privateTaskConfig/** and taskResults/** are server-only: no client access.
+    }
+
+    // teamDirectory/** is server-only: codes are resolved by the join endpoint.
+  }
+}

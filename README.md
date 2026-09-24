@@ -1,44 +1,51 @@
-# Adavya
+# Adavya — Team Challenge Platform
 
-One repository for the website, mobile web app, and shared API.
+A real-time, multi-team campus competition. Each team has one captain (laptop) and three players (phones). Teams play six tasks in a fixed order, and every team is ranked on each task by server completion time.
 
 ```text
 apps/
-  website/         Existing React website (previously frontend/)
-  mobile/          React mobile web app starter for iOS and Android browsers
-  api/             Shared Express API (previously backend/)
+  website/         Captain website + /admin operator console (React, Vite)
+  mobile/          Player app for Android/iOS browsers (React, Vite, MediaPipe)
+  api/             Trusted game API: auth, teams, task engine, ranking (Express, Firebase Admin)
 packages/
-  shared/          Reserved for shared types, validation, and API contracts
-  ui/              Reserved for shared React components and design tokens
+  shared/          Client types, API client, event sender, sensor detectors (dependency-free)
+  ui/              Reserved for shared React components
+firebase/          Firestore rules, indexes, rules tests, emulator tooling
+docs/OPERATIONS.md Deployment, event-day guide, reset, rollback, test accounts, limitations
 ```
+
+| Task | Captain sees | Players do |
+|---|---|---|
+| task01 Orientation | Who is up, accepted bits | Tilt left (0) / right (1) |
+| task02 GPS letters | Five hints, discovered letters, submits the word | Walk into geofences to reveal letters |
+| task03 Pose relay | Each player's pose and status | Hold the pose in front of the camera |
+| task04 Sound relay | Ordered loudness targets | Hold a steady sound |
+| task05 Response time | Targets, attempts, scores | Blind stopwatch |
+| task06 Morse relay | Word, submissions (red/green) | Tap dots and dashes |
+
+Specifications: [AGENT.md](AGENT.md) (contract), [ARCHITECTURE.md](ARCHITECTURE.md) (design as built), [BUILD.md](BUILD.md) (plan, commands, acceptance), [PROMPT.md](PROMPT.md) (work modules).
 
 ## Development
 
-Use Node.js 22 or newer and npm. Each app owns its dependencies and lockfile.
-From the repository root, run `npm run setup` to install all three apps.
-Run each development server in a separate terminal:
+Node.js 22+ and Java 21+ (Firestore emulator).
 
 ```sh
-npm run dev:website  # http://localhost:5173
-npm run dev:mobile   # http://localhost:5174
-npm run dev:api      # http://localhost:5000
+npm run setup      # install every app
+npm test           # shared + Firestore rules + API/engine tests (starts the emulator)
+npm run build      # build all apps
 ```
 
-`npm run build` builds all apps. `npm run test:api` builds the API and runs its existing tests.
-Build output is in each app's `dist/` directory. Deploy the website and mobile app as separate sites; configure SPA fallback to `index.html` when client-side routing is used.
+To run everything locally against the emulators, see [BUILD.md §4](BUILD.md#4-local-development-commands). The dev servers are:
 
-## Configuration after migration
+```sh
+npm run emulators    # Auth :9099, Firestore :8080, UI :4000
+npm run dev:api      # http://localhost:5000
+npm run dev:website  # http://localhost:5173  (captain, /admin)
+npm run dev:mobile   # http://localhost:5174  (players)
+```
 
-Existing local environment files moved with their apps. Website configuration now lives in `apps/website/.env`; server secrets live in `apps/api/.env`. The website still uses `VITE_API_URL` and its existing Firebase configuration. When mobile features need configuration, put their public values in `apps/mobile/.env`.
-
-The API accepts `FRONTEND_URL` for the website origin and `MOBILE_URL` for the mobile origin, plus local development origins on ports 5173 and 5174. Set both origins to the deployed HTTPS addresses. Update any external hosting build paths from `frontend` to `apps/website` and `backend` to `apps/api`.
+Each app has a `.env.example`. Server secrets belong only in `apps/api/.env`, which is gitignored.
 
 ## Mobile and sensors
 
-The mobile app is currently a responsive starter. Features, sensor integration, installability, and offline behavior will be implemented from the task prompts. Existing website routes remain in the website until a task specifies their mobile equivalents.
-
-Target iOS Safari and Android Chrome. Sensor support depends on the specific browser, device, and API; verify each required capability on physical phones. Use HTTPS for device testing and deployment: opening an HTTP LAN address on a phone is not equivalent to localhost on the development computer.
-
-Request sensor permissions in response to an explicit user action, detect API support, handle permission denial or unavailable readings, and release listeners/media streams when leaving a task. Motion/orientation may require `requestPermission()` on supported browsers. Do not assume background sensor access.
-
-References: [motion permissions](https://developer.mozilla.org/en-US/docs/Web/API/DeviceMotionEvent/requestPermission_static), [camera/microphone permissions](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia).
+Target iOS Safari and Android Chrome over HTTPS: camera, microphone, GPS and motion sensors need a secure context, so an HTTP LAN address on a phone does not work like localhost. Permissions are requested from a tap, denial is explained on screen, and streams and listeners are released when a task ends. Verify every sensor on physical phones before the event (see `docs/OPERATIONS.md`).

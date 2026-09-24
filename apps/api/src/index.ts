@@ -6,7 +6,7 @@ import { initializeFirebaseAdmin } from './config/firebase.js';
 import { authRouter } from './routes/auth.routes.js';
 import { teamRouter } from './routes/team.routes.js';
 import { taskRouter } from './routes/task.routes.js';
-import { roundRouter } from './routes/round.routes.js';
+import { adminRouter } from './routes/admin.routes.js';
 
 // Load environment variables
 dotenv.config({ path: fileURLToPath(new URL('../.env', import.meta.url)) });
@@ -24,7 +24,7 @@ app.use(
   cors({
     origin: [FRONTEND_URL, MOBILE_URL, 'http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5174', 'http://127.0.0.1:5174'],
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
@@ -51,8 +51,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 app.use('/api/auth', authRouter);
 app.use('/api/teams', teamRouter);
 app.use('/api/tasks', taskRouter);
-app.use('/api/rounds', roundRouter);
-app.use('/api/rounds', taskRouter);
+app.use('/api/admin', adminRouter);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
