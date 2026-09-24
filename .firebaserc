@@ -1,0 +1,13 @@
+{
+  "projects": {
+    "default": "adavya-f796d"
+  },
+  "targets": {
+    "adavya-f796d": {
+      "hosting": {
+        "captain": ["adavya-f796d"],
+        "player": ["adavya-player"]
+      }
+    }
+  }
+}

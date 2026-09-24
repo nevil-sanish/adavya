@@ -1,0 +1,95 @@
+# Render Blueprint: Dashboard → New → Blueprint → select this repository.
+#
+# Three services:
+#   adavya-api      trusted game API (Docker, apps/api/Dockerfile)
+#   adavya-captain  captain website + /admin (static, apps/website)
+#   adavya-player   player app for phones (static, apps/mobile)
+# Both sites forward /api/* to the API, so the browser only ever talks to its own HTTPS origin.
+#
+# If Render appends a suffix to a service name (name already taken), update the
+# /api/* destinations and VITE_PLAYER_APP_URL below to the real .onrender.com URLs.
+services:
+  - type: web
+    name: adavya-api
+    runtime: docker
+    dockerContext: ./apps/api
+    dockerfilePath: ./apps/api/Dockerfile
+    region: singapore
+    # Free instances sleep after 15 idle minutes (first request then takes ~1 minute).
+    # Upgrade to a paid instance for rehearsals and the event.
+    plan: free
+    healthCheckPath: /api/health
+    buildFilter:
+      paths:
+        - apps/api/**
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: COMPETITION_ID
+        value: main
+      - key: FIREBASE_PROJECT_ID
+        value: adavya-f796d
+      - key: ALLOWED_EMAIL_DOMAIN
+        value: iiitkottayam.ac.in
+      - key: FRONTEND_URL
+        value: https://adavya-captain.onrender.com
+      - key: MOBILE_URL
+        value: https://adavya-player.onrender.com
+      # From a Firebase service-account key (Project settings → Service accounts). Entered in the dashboard.
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
+      # Comma-separated institute emails allowed to use /admin.
+      - key: ADMIN_EMAILS
+        sync: false
+
+  - type: web
+    name: adavya-captain
+    runtime: static
+    buildCommand: npm ci --prefix apps/website && npm run build --prefix apps/website
+    staticPublishPath: ./apps/website/dist
+    buildFilter:
+      paths:
+        - apps/website/**
+        - packages/shared/**
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: VITE_PLAYER_APP_URL
+        value: https://adavya-player.onrender.com
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://adavya-api.onrender.com/api/*
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  - type: web
+    name: adavya-player
+    runtime: static
+    buildCommand: npm ci --prefix apps/mobile && npm run build --prefix apps/mobile
+    staticPublishPath: ./apps/mobile/dist
+    buildFilter:
+      paths:
+        - apps/mobile/**
+        - packages/shared/**
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://adavya-api.onrender.com/api/*
+      - type: rewrite
+        source: /*
+        destination: /index.html

@@ -5,7 +5,7 @@
   "scripts": {
     "emulators": "firebase emulators:start --only auth,firestore --project demo-adavya --config ../firebase.json",
     "test": "firebase emulators:exec --only firestore --project demo-adavya --config ../firebase.json \"node --test tests/*.test.mjs\"",
-    "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes --config ../firebase.json"
+    "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes --config ../firebase.json --project adavya-f796d"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",

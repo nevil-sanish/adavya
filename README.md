@@ -23,6 +23,8 @@ docs/OPERATIONS.md Deployment, event-day guide, reset, rollback, test accounts, 
 | task05 Response time | Targets, attempts, scores | Blind stopwatch |
 | task06 Morse relay | Word, submissions (red/green) | Tap dots and dashes |
 
+Deployment: Render Blueprint in `render.yaml` — see [docs/OPERATIONS.md](docs/OPERATIONS.md#1-deploying-on-render-chosen-host).
+
 Specifications: [AGENT.md](AGENT.md) (contract), [ARCHITECTURE.md](ARCHITECTURE.md) (design as built), [BUILD.md](BUILD.md) (plan, commands, acceptance), [PROMPT.md](PROMPT.md) (work modules).
 
 ## Development
@@ -45,6 +47,18 @@ npm run dev:mobile   # http://localhost:5174  (players)
 ```
 
 Each app has a `.env.example`. Server secrets belong only in `apps/api/.env`, which is gitignored.
+
+## Testing on a phone
+
+Phones must use HTTPS for GPS, camera, microphone and motion sensors.
+
+1. Put the phone on the same Wi-Fi as the laptop.
+2. Run the API (`npm run dev:api`) and the player app in phone mode: `npm run dev:phone`. Vite prints a `Network: https://<laptop-ip>:5174` address. `/api` is proxied to the local API, so the phone needs only that address.
+3. One time: in Firebase console → Authentication → Settings → Authorized domains, add the laptop IP (e.g. `172.16.0.210`) so Google sign-in works there.
+4. Open the address on the phone. The certificate is self-signed: tap Advanced → Proceed (Chrome) or Show Details → visit this website (Safari).
+5. The captain uses the website on the laptop as usual (`npm run dev:website`).
+
+If the laptop's IP changes, repeat step 3 with the new one. For the event, deploy over real HTTPS instead (docs/OPERATIONS.md).
 
 ## Mobile and sensors
 

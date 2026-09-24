@@ -6,12 +6,17 @@
     "setup": "npm ci --prefix apps/website && npm ci --prefix apps/mobile && npm ci --prefix apps/api && npm ci --prefix firebase",
     "dev:website": "npm run dev --prefix apps/website",
     "dev:mobile": "npm run dev --prefix apps/mobile",
+    "dev:phone": "npm run dev:phone --prefix apps/mobile",
     "dev:api": "npm run dev --prefix apps/api",
     "emulators": "npm run emulators --prefix firebase",
     "build": "npm run build --prefix apps/website && npm run build --prefix apps/mobile && npm run build --prefix apps/api",
     "test": "npm run test:shared && npm run test:rules && npm run test:api",
     "test:shared": "node --test packages/shared/tests/",
     "test:rules": "npm test --prefix firebase",
-    "test:api": "npm run test:emulator --prefix apps/api"
+    "test:api": "npm run test:emulator --prefix apps/api",
+    "deploy:api": "gcloud run deploy adavya-api --source apps/api --region asia-south1 --project adavya-f796d --allow-unauthenticated --update-env-vars NODE_ENV=production,COMPETITION_ID=main,FIREBASE_PROJECT_ID=adavya-f796d,ALLOWED_EMAIL_DOMAIN=iiitkottayam.ac.in,FRONTEND_URL=https://adavya-f796d.web.app,MOBILE_URL=https://adavya-player.web.app",
+    "deploy:rules": "npm run deploy:rules --prefix firebase",
+    "deploy:web": "VITE_PLAYER_APP_URL=https://adavya-player.web.app npm run build --prefix apps/website && npm run build --prefix apps/mobile && npm --prefix firebase exec -- firebase deploy --only hosting --config firebase.json",
+    "deploy": "npm run deploy:rules && npm run deploy:api && npm run deploy:web"
   }
 }

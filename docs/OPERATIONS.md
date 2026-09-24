@@ -2,16 +2,58 @@
 
 For architecture see [ARCHITECTURE.md](../ARCHITECTURE.md); for local development see [BUILD.md](../BUILD.md).
 
-## 1. Components to deploy
+## 1. Deploying on Render (chosen host)
 
-| Component | Source | Host | Notes |
+`render.yaml` is a Render Blueprint for the whole platform:
+
+| Service | What | URL |
+|---|---|---|
+| `adavya-api` | Trusted API, Docker (`apps/api/Dockerfile`), Singapore | https://adavya-api.onrender.com |
+| `adavya-captain` | Captain website + `/admin`, static | https://adavya-captain.onrender.com |
+| `adavya-player` | Player app, static | https://adavya-player.onrender.com |
+
+Both sites rewrite `/api/*` to the API, so browsers only talk to their own HTTPS origin.
+
+First deployment:
+
+1. Push the repository to GitHub or GitLab.
+2. Render dashboard → **New → Blueprint** → pick the repository. Render reads `render.yaml`.
+3. When asked for the secret values of `adavya-api`:
+   - `FIREBASE_CLIENT_EMAIL` and `FIREBASE_PRIVATE_KEY`: Firebase console → Project settings → Service accounts → **Generate new private key**, then copy `client_email` and `private_key` from the JSON. Paste the key with its real line breaks or with `\n`; both work. Do not commit the JSON.
+   - `ADMIN_EMAILS`: your institute email(s), comma-separated.
+4. **Apply**. Wait until all three services are live; https://adavya-api.onrender.com/api/health returns `ok`.
+5. If Render gave a service a different URL (name already taken), edit the two `/api/*` destinations and `VITE_PLAYER_APP_URL` in `render.yaml`, push, and let it redeploy.
+6. Firebase console → Authentication → Settings → **Authorized domains** → add `adavya-captain.onrender.com` and `adavya-player.onrender.com`.
+7. Deploy the Firestore rules (Render does not host them): `npm --prefix firebase exec -- firebase login`, then `npm run deploy:rules`.
+
+After that, every push redeploys only the services whose files changed (`buildFilter`).
+
+**Plan.** The Blueprint starts the API on the free plan, which sleeps after 15 idle minutes; the next request then waits about a minute. Switch `adavya-api` to a paid instance before rehearsals and the event. The static sites are free.
+
+## 1b. Alternative: Firebase Hosting + Cloud Run
+
+| Component | Source | Host | Deploy |
 |---|---|---|---|
-| Firestore rules and indexes | `firebase/firestore.rules`, `firebase/firestore.indexes.json` | Firebase | `npm run deploy:rules --prefix firebase` |
-| Trusted API | `apps/api` (`npm run build`, `npm start`) | Any HTTPS Node 22 host (Cloud Run, Render, a VM behind TLS) | Needs a service account for the project |
-| Captain website | `apps/website/dist` | Firebase Hosting target `captain` (or any static host with SPA fallback) | |
-| Player app | `apps/mobile/dist` | Firebase Hosting target `player` | Must be HTTPS: camera, microphone, GPS and motion need a secure context |
+| Firestore rules and indexes | `firebase/` | Firebase | `npm run deploy:rules` |
+| Trusted API | `apps/api` (Dockerfile) | Cloud Run `adavya-api`, region `asia-south1` | `npm run deploy:api` |
+| Captain website | `apps/website/dist` | Firebase Hosting site `adavya-f796d` (https://adavya-f796d.web.app) | `npm run deploy:web` |
+| Player app | `apps/mobile/dist` | Firebase Hosting site `adavya-player` (https://adavya-player.web.app) | `npm run deploy:web` |
 
-Hosting targets are declared in `firebase.json`. Map them once: `firebase target:apply hosting captain <site-id>` and `firebase target:apply hosting player <site-id>`.
+Both Hosting sites forward `/api/**` to the Cloud Run service (`firebase.json`), so the clients call the API on their own origin: no CORS and no API URL in the builds (`.env.production`). Everything is HTTPS, which the phone sensors need. `*.web.app` domains are already authorized for Firebase Auth.
+
+First deployment (from the repo root):
+
+```sh
+gcloud auth login && gcloud config set project adavya-f796d      # Blaze plan required for Cloud Run
+npm --prefix firebase exec -- firebase login
+npm --prefix firebase exec -- firebase hosting:sites:create adavya-player --project adavya-f796d
+npm run deploy               # rules → API (Cloud Build from apps/api/Dockerfile) → both sites
+gcloud run services update adavya-api --region asia-south1 --update-env-vars ADMIN_EMAILS=you@iiitkottayam.ac.in
+```
+
+Later deployments: `npm run deploy:web` (clients only) or `npm run deploy:api` (API only). On Cloud Run the API uses the service's default identity (Application Default Credentials); do not upload a key.
+
+**Other hosts.** The two clients are static SPAs and can be served anywhere with a rewrite of `/api/*` to the API and an SPA fallback to `/index.html`. Add each domain to Firebase Authentication → Authorized domains. The API is a long-running Express server with Admin SDK transactions; keep it on a container host.
 
 ## 2. Deployment checklist
 
@@ -32,9 +74,7 @@ Configuration:
 Release:
 
 - [ ] `npm run setup && npm test && npm run build` passes on the release commit.
-- [ ] `npm run deploy:rules --prefix firebase`.
-- [ ] Deploy the API; `GET /api/health` returns `ok`.
-- [ ] `firebase deploy --only hosting --config firebase.json` (captain and player).
+- [ ] `npm run deploy` (rules, API, both sites); https://adavya-f796d.web.app/api/health returns `ok`.
 - [ ] `cd apps/api && npm run setup -- --name "<Event name>" --locations <locations.json> --assignment <assignment.json>`. This creates the competition in `DRAFT` with task definitions, the ten Level 02 locations and riddles, and the default assignment. `config/*.sample.json` are templates: the coordinates are placeholders.
 - [ ] Sign in to the captain site with an admin account and open `/admin`: check locations, task configs and the scoring policy.
 - [ ] Record the real coordinates of each location: stand there with `/admin` open on a phone and press **Use my position**, then save.
