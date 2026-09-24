@@ -1,6 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.js';
 import {
+  Clock,
+  Play,
+  Pause,
+  RotateCcw,
   Check,
   LogOut,
   ArrowRight,
@@ -26,6 +30,39 @@ interface TeamMember {
 
 export const WorkspaceHomePage: React.FC = () => {
   const { user, logout } = useAuth();
+
+  // ----------------------------------------------------
+  // 1. TIMER STATE (Initialized at 00:00, Idle on Page Load)
+  // ----------------------------------------------------
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [isRunning, setIsRunning] = useState(false);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (isRunning) {
+      interval = setInterval(() => {
+        setTimerSeconds((prev) => prev + 1);
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isRunning]);
+
+  const handleToggleTimer = () => setIsRunning(!isRunning);
+
+  const handleResetTimer = () => {
+    setIsRunning(false);
+    setTimerSeconds(0);
+  };
+
+  const formatTime = (secs: number) => {
+    const m = Math.floor(secs / 60)
+      .toString()
+      .padStart(2, '0');
+    const s = (secs % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
 
   // ----------------------------------------------------
   // 1. PIPELINE PROGRESS STATE (Top-Right Box: Read-Only Pipeline)
@@ -148,11 +185,76 @@ export const WorkspaceHomePage: React.FC = () => {
       <main className="flex-1 w-full px-4 sm:px-6 lg:px-8 py-4 space-y-4">
         <div className="flex flex-col lg:flex-row gap-4 items-start w-full">
           {/* --------------------------------------------------
-              LEFT SIDEBAR: TEAM MEMBERS
+              LEFT SIDEBAR: TIMER + TEAM MEMBERS
               Slim, compact width (lg:w-[240px])
           --------------------------------------------------- */}
           <div className="w-full lg:w-[240px] shrink-0 space-y-3">
-            {/* TEAM MEMBERS */}
+            {/* 1. TIMER CARD (Initialized at 00:00, Idle on load) */}
+            <div className="bg-zinc-900 border border-zinc-800 rounded-[12px] p-3 space-y-2 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-1.5">
+                  <Clock className="w-3.5 h-3.5 text-blue-400" />
+                  <h2 className="text-xs font-semibold tracking-tight text-zinc-200">
+                    Timer
+                  </h2>
+                </div>
+                <span
+                  className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${
+                    isRunning
+                      ? 'bg-blue-950/70 text-blue-400 border-blue-800/40'
+                      : 'bg-zinc-950 text-zinc-500 border-zinc-800'
+                  }`}
+                >
+                  {isRunning ? 'Active' : 'Standby'}
+                </span>
+              </div>
+
+              {/* Digital Display (Shows 00:00 on load) */}
+              <div className="text-center py-1">
+                <div className="font-mono text-3xl font-bold tracking-tight text-white">
+                  {formatTime(timerSeconds)}
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-0.5">
+                  {isRunning ? 'Session in progress' : 'Waiting for host'}
+                </p>
+              </div>
+
+              {/* Timer Controls */}
+              <div className="flex items-center space-x-1.5 pt-0.5">
+                <button
+                  type="button"
+                  onClick={handleToggleTimer}
+                  className={`flex-1 flex items-center justify-center space-x-1.5 py-1.5 px-2 rounded-[6px] text-white text-[11px] font-medium transition-colors ${
+                    isRunning
+                      ? 'bg-amber-600 hover:bg-amber-500'
+                      : 'bg-blue-600 hover:bg-blue-500'
+                  }`}
+                >
+                  {isRunning ? (
+                    <>
+                      <Pause className="w-3 h-3" />
+                      <span>Pause</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-3 h-3 fill-current" />
+                      <span>Start</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleResetTimer}
+                  className="p-1.5 rounded-[6px] bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/80 transition-colors"
+                  title="Reset timer to 00:00"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+
+            {/* 2. TEAM MEMBERS */}
             <div className="bg-zinc-900 border border-zinc-800 rounded-[12px] p-3 space-y-2 shadow-sm">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-1.5">
