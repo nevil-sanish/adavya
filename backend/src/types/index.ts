@@ -130,10 +130,10 @@ export interface RoundInstance {
     player2: 0 | 1;
     player3: 0 | 1;
   };
-  orientations: (0 | 1)[];
-  player1: 0 | 1;
-  player2: 0 | 1;
-  player3: 0 | 1;
+  orientations: (0 | 1)[] | number | null;
+  player1: 0 | 1 | null;
+  player2: 0 | 1 | null;
+  player3: 0 | 1 | null;
   players: RoundPlayer[];
   timerStarted: boolean;
   createdAt: string;

@@ -507,10 +507,10 @@ taskRouter.post('/round', async (req, res): Promise<void> => {
       player2,
       player3,
     },
-    orientations: [player1, player2, player3],
-    player1,
-    player2,
-    player3,
+    orientations: null,
+    player1: null,
+    player2: null,
+    player3: null,
     players,
     timerStarted: true,
     createdAt: now,
@@ -530,6 +530,30 @@ taskRouter.post('/round', async (req, res): Promise<void> => {
     message: `Round ${roundNumber} created successfully`,
     round: roundInstance,
   });
+});
+
+/**
+ * PATCH /api/tasks/round/:roundId/orientations
+ * Update player1, player2, player3, or orientations for real-time verification (0 | 1)
+ */
+taskRouter.patch('/round/:roundId/orientations', async (req, res): Promise<void> => {
+  const { roundId } = req.params;
+  const { orientations, player1, player2, player3 } = req.body;
+  try {
+    const db = getDb();
+    const updatePayload: Record<string, any> = {
+      updatedAt: new Date().toISOString(),
+    };
+    if (orientations !== undefined) updatePayload.orientations = orientations;
+    if (player1 !== undefined) updatePayload.player1 = player1;
+    if (player2 !== undefined) updatePayload.player2 = player2;
+    if (player3 !== undefined) updatePayload.player3 = player3;
+
+    await db.collection('rounds').doc(roundId).set(updatePayload, { merge: true });
+    res.status(200).json({ message: 'Round updated successfully', roundId, updatePayload });
+  } catch (err) {
+    res.status(500).json({ error: 'DB_ERROR', message: 'Failed to update orientations' });
+  }
 });
 
 /**

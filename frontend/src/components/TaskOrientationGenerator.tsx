@@ -2,8 +2,18 @@ import React, { useState, useEffect } from 'react';
 import {
   Layers,
   Clock,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
-import { doc, setDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import {
+  doc,
+  setDoc,
+  collection,
+  getDocs,
+  query,
+  where,
+  onSnapshot,
+} from 'firebase/firestore';
 import { db } from '../services/firebase.js';
 import { useAuth } from '../context/AuthContext.js';
 import { RoundInstance } from '../types/auth.js';
@@ -83,6 +93,18 @@ export const TaskOrientationGenerator: React.FC<TaskOrientationGeneratorProps> =
   const [generationKey, setGenerationKey] = useState<number>(0);
   const [hasGenerated, setHasGenerated] = useState<boolean>(false);
 
+  // Round Document & Real-time Reported Player Values (null until updated in Firestore)
+  const [currentRoundDocId, setCurrentRoundDocId] = useState<string | null>(null);
+  const [reportedPlayers, setReportedPlayers] = useState<{
+    player1: number | null;
+    player2: number | null;
+    player3: number | null;
+  }>({
+    player1: null,
+    player2: null,
+    player3: null,
+  });
+
   // Round Timer State
   const [roundTimer, setRoundTimer] = useState<number>(0);
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
@@ -107,7 +129,112 @@ export const TaskOrientationGenerator: React.FC<TaskOrientationGeneratorProps> =
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Helper to extract reported player1, player2, player3 from Firestore document
+  const extractReported = (data: any) => {
+    let p1: number | null = typeof data.player1 === 'number' ? data.player1 : null;
+    let p2: number | null = typeof data.player2 === 'number' ? data.player2 : null;
+    let p3: number | null = typeof data.player3 === 'number' ? data.player3 : null;
+
+    // Fallback: check orientations array or map if player1/2/3 aren't directly numbers
+    if (Array.isArray(data.orientations)) {
+      if (p1 === null && typeof data.orientations[0] === 'number') p1 = data.orientations[0];
+      if (p2 === null && typeof data.orientations[1] === 'number') p2 = data.orientations[1];
+      if (p3 === null && typeof data.orientations[2] === 'number') p3 = data.orientations[2];
+    } else if (typeof data.orientations === 'object' && data.orientations !== null) {
+      if (p1 === null && typeof data.orientations.player1 === 'number') p1 = data.orientations.player1;
+      if (p2 === null && typeof data.orientations.player2 === 'number') p2 = data.orientations.player2;
+      if (p3 === null && typeof data.orientations.player3 === 'number') p3 = data.orientations.player3;
+    }
+
+    return { player1: p1, player2: p2, player3: p3 };
+  };
+
+  // --------------------------------------------------------------------------
+  // Real-time Firestore Sync: Listen to rounds collection for active team
+  // --------------------------------------------------------------------------
+  useEffect(() => {
+    if (!activeTeamId) return;
+
+    const roundsQuery = query(
+      collection(db, 'rounds'),
+      where('teamId', '==', activeTeamId)
+    );
+
+    const unsub = onSnapshot(
+      roundsQuery,
+      (snapshot) => {
+        if (snapshot.empty) return;
+
+        let latestDoc: any = null;
+        let maxRound = -1;
+
+        snapshot.forEach((d) => {
+          const data = d.data();
+          const rNum = data.roundNumber || 0;
+          if (rNum > maxRound) {
+            maxRound = rNum;
+            latestDoc = { id: d.id, ...data };
+          }
+        });
+
+        if (latestDoc) {
+          setActiveRoundNumber(latestDoc.roundNumber || 1);
+          setCurrentRoundDocId(latestDoc.id);
+
+          if (latestDoc.players && Array.isArray(latestDoc.players)) {
+            setPlayers(
+              latestDoc.players.map((p: any) => ({
+                id: p.id,
+                name: p.name,
+                orientation:
+                  p.orientationLabel ||
+                  (p.orientation === 1
+                    ? 'clockwise'
+                    : p.orientation === 0
+                    ? 'anticlockwise'
+                    : null),
+              }))
+            );
+            setHasGenerated(true);
+          }
+
+          // Extract reported values (null until updated)
+          setReportedPlayers(extractReported(latestDoc));
+        }
+      },
+      (err) => {
+        console.warn('[Firestore] Rounds collection listener error:', err);
+      }
+    );
+
+    return () => unsub();
+  }, [activeTeamId]);
+
+  // Direct listener to the active round document for instantaneous field updates
+  useEffect(() => {
+    if (!currentRoundDocId) return;
+
+    const unsub = onSnapshot(
+      doc(db, 'rounds', currentRoundDocId),
+      (snap) => {
+        if (!snap.exists()) return;
+        const data = snap.data();
+        if (!data) return;
+
+        // Extract live reported values whenever document updates
+        setReportedPlayers(extractReported(data));
+      },
+      (err) => {
+        console.warn('[Firestore] Round doc listener error:', err);
+      }
+    );
+
+    return () => unsub();
+  }, [currentRoundDocId]);
+
+  // --------------------------------------------------------------------------
   // Orientation generator trigger with Timer & Firestore Round recording
+  // --------------------------------------------------------------------------
   const handleGenerate = async () => {
     if (hasGenerated || isSavingRound) return;
 
@@ -132,10 +259,13 @@ export const TaskOrientationGenerator: React.FC<TaskOrientationGeneratorProps> =
 
     // 2. Start the timer immediately
     setIsTimerRunning(true);
-    onStartTimer?.(); // Starts the Left Sidebar timer as well
+    onStartTimer?.();
 
     // 3. Create round instance in Firestore collection 'rounds'
+    // Target assigned orientations are in 'orientation: { player1, player2, player3 }'
+    // 'player1', 'player2', 'player3', and 'orientations' are initially null until updated
     setIsSavingRound(true);
+    setReportedPlayers({ player1: null, player2: null, player3: null });
     const now = new Date().toISOString();
 
     let computedRoundNumber = activeRoundNumber;
@@ -149,6 +279,7 @@ export const TaskOrientationGenerator: React.FC<TaskOrientationGeneratorProps> =
     }
 
     const roundDocId = `${activeTeamId}_round_${computedRoundNumber}_${Date.now()}`;
+    setCurrentRoundDocId(roundDocId);
 
     const roundData: RoundInstance = {
       roundId: roundDocId,
@@ -159,10 +290,10 @@ export const TaskOrientationGenerator: React.FC<TaskOrientationGeneratorProps> =
         player2: p2Val,
         player3: p3Val,
       },
-      orientations: [p1Val, p2Val, p3Val],
-      player1: p1Val,
-      player2: p2Val,
-      player3: p3Val,
+      orientations: null, // Initially null
+      player1: null,      // Initially null until updated!
+      player2: null,      // Initially null until updated!
+      player3: null,      // Initially null until updated!
       players: [
         { id: 'player-1', name: 'Player 1', orientation: p1Val, orientationLabel: p1Ori },
         { id: 'player-2', name: 'Player 2', orientation: p2Val, orientationLabel: p2Ori },
@@ -176,7 +307,7 @@ export const TaskOrientationGenerator: React.FC<TaskOrientationGeneratorProps> =
     // Direct Client-side Firestore persistence
     try {
       await setDoc(doc(db, 'rounds', roundDocId), roundData, { merge: true });
-      console.log(`[Firestore Client] Round instance saved to 'rounds/${roundDocId}' (Round ${computedRoundNumber})`);
+      console.log(`[Firestore Client] Round saved with player1, player2, player3 as null in 'rounds/${roundDocId}'`);
     } catch (fsErr) {
       console.warn('[Firestore Client] Error writing round to Firestore:', fsErr);
     }
@@ -236,7 +367,7 @@ export const TaskOrientationGenerator: React.FC<TaskOrientationGeneratorProps> =
       </div>
 
       {/* -------------------------------------------------------------
-          1. ORIENTATION GENERATOR TASK VIEW
+          ORIENTATION GENERATOR CARDS (Reactive Blue / Red on verification)
       -------------------------------------------------------------- */}
       <div
         className="grid gap-3 flex-1 items-center content-center py-4"
@@ -244,64 +375,124 @@ export const TaskOrientationGenerator: React.FC<TaskOrientationGeneratorProps> =
           gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
         }}
       >
-        {players.map((player) => {
+        {players.map((player, idx) => {
           const isClockwise = player.orientation === 'clockwise';
           const isAnticlockwise = player.orientation === 'anticlockwise';
           const hasResult = player.orientation !== null;
 
-          // Vibrant emerald for Clockwise, vibrant amber for Anticlockwise
-          const iconColorClass = isClockwise
-            ? 'text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.35)]'
-            : isAnticlockwise
-            ? 'text-amber-400 drop-shadow-[0_0_10px_rgba(251,191,36,0.35)]'
-            : 'text-zinc-600';
+          // Assigned orientation: 1 for Clockwise, 0 for Anticlockwise
+          const assignedVal = isClockwise ? 1 : isAnticlockwise ? 0 : null;
 
-          const labelColorClass = isClockwise
-            ? 'text-emerald-400 font-semibold'
-            : isAnticlockwise
-            ? 'text-amber-400 font-semibold'
-            : 'text-zinc-600';
+          // Reported value for this player from Firestore (null until updated!)
+          const playerKey = `player${idx + 1}` as 'player1' | 'player2' | 'player3';
+          const reportedVal = reportedPlayers[playerKey];
+
+          // Comparison:
+          // - matched: reportedVal === assignedVal -> BLUE card
+          // - mismatched: reportedVal !== assignedVal -> RED card
+          // - idle: reportedVal === null -> Default dark card
+          let matchStatus: 'idle' | 'matched' | 'mismatched' = 'idle';
+          if (hasResult && reportedVal !== null && assignedVal !== null) {
+            matchStatus = reportedVal === assignedVal ? 'matched' : 'mismatched';
+          }
+
+          // Card theme styling
+          const cardThemeClass =
+            matchStatus === 'matched'
+              ? 'bg-blue-950/40 border-blue-500 shadow-[0_0_24px_rgba(59,130,246,0.35)] ring-1 ring-blue-500/50'
+              : matchStatus === 'mismatched'
+              ? 'bg-red-950/40 border-red-500 shadow-[0_0_24px_rgba(239,68,68,0.35)] ring-1 ring-red-500/50'
+              : 'bg-zinc-950/70 border-zinc-800/80 shadow-sm';
+
+          // Icon and text accent colors
+          const iconColorClass =
+            matchStatus === 'matched'
+              ? 'text-blue-400 drop-shadow-[0_0_12px_rgba(59,130,246,0.5)]'
+              : matchStatus === 'mismatched'
+              ? 'text-red-400 drop-shadow-[0_0_12px_rgba(239,68,68,0.5)]'
+              : isClockwise
+              ? 'text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.35)]'
+              : isAnticlockwise
+              ? 'text-amber-400 drop-shadow-[0_0_10px_rgba(251,191,36,0.35)]'
+              : 'text-zinc-600';
+
+          const labelColorClass =
+            matchStatus === 'matched'
+              ? 'text-blue-400 font-semibold'
+              : matchStatus === 'mismatched'
+              ? 'text-red-400 font-semibold'
+              : isClockwise
+              ? 'text-emerald-400 font-semibold'
+              : isAnticlockwise
+              ? 'text-amber-400 font-semibold'
+              : 'text-zinc-600';
 
           return (
             <div
               key={player.id}
-              className="bg-zinc-950/70 border border-zinc-800/80 rounded-[12px] py-10 px-5 flex flex-col items-center justify-center gap-3 text-center transition-all shadow-sm min-h-[220px]"
+              className={`rounded-[12px] border py-7 px-4 flex flex-col items-center justify-between gap-3 text-center transition-all duration-300 min-h-[220px] ${cardThemeClass}`}
             >
-              {/* Player name — 13px, medium weight, secondary text color */}
-              <span className="text-[13px] font-medium text-zinc-400 select-none">
-                {player.name}
-              </span>
+              {/* Header row inside card */}
+              <div className="flex items-center justify-between w-full">
+                <span className="text-[13px] font-medium text-zinc-300 select-none">
+                  {player.name}
+                </span>
 
-              {/* Only show icon and label AFTER generate is clicked */}
+                {matchStatus === 'matched' && (
+                  <span className="flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/40 animate-pulse">
+                    <CheckCircle2 className="w-3 h-3 text-blue-400" />
+                    <span>Matched</span>
+                  </span>
+                )}
+
+                {matchStatus === 'mismatched' && (
+                  <span className="flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-500/20 text-red-300 border border-red-500/40">
+                    <XCircle className="w-3 h-3 text-red-400" />
+                    <span>Mismatch</span>
+                  </span>
+                )}
+
+                {matchStatus === 'idle' && hasResult && (
+                  <span className="text-[10px] font-mono text-zinc-500">
+                    {reportedVal === null ? 'Waiting...' : ''}
+                  </span>
+                )}
+              </div>
+
+              {/* Main Icon & Assigned Label */}
               {hasResult ? (
-                <>
-                  {/* Icon container */}
+                <div className="flex flex-col items-center justify-center space-y-2 my-auto">
                   <div
                     key={`${player.id}-${generationKey}`}
                     className={`transition-all duration-300 transform scale-100 ${iconColorClass}`}
                   >
-                    {isClockwise ? (
-                      <TablerRotateClockwise />
-                    ) : (
-                      <TablerRotate />
-                    )}
+                    {isClockwise ? <TablerRotateClockwise /> : <TablerRotate />}
                   </div>
 
-                  {/* Orientation label — 13px */}
                   <span className={`text-[13px] transition-colors select-none ${labelColorClass}`}>
-                    {isClockwise
-                      ? 'Clockwise'
-                      : isAnticlockwise
-                      ? 'Anticlockwise'
-                      : ''}
+                    {isClockwise ? 'Clockwise (1)' : isAnticlockwise ? 'Anticlockwise (0)' : ''}
                   </span>
-                </>
+                </div>
               ) : (
-                /* Before first generate: No icon below player name */
-                <span className="text-[13px] font-medium text-zinc-600 select-none">
-                  —
-                </span>
+                <div className="my-auto">
+                  <span className="text-[13px] font-medium text-zinc-600 select-none">
+                    —
+                  </span>
+                </div>
               )}
+
+              {/* Footer readout inside card */}
+              <div className="w-full text-center text-[10px] font-mono border-t border-zinc-800/40 pt-1.5">
+                {reportedVal !== null ? (
+                  <span className={matchStatus === 'matched' ? 'text-blue-300 font-semibold' : 'text-red-300 font-semibold'}>
+                    Reported: {reportedVal} {reportedVal === 1 ? '(CW)' : '(CCW)'}
+                  </span>
+                ) : (
+                  <span className="text-zinc-600">
+                    {hasResult ? 'Waiting for update (null)' : 'Standby'}
+                  </span>
+                )}
+              </div>
             </div>
           );
         })}
@@ -309,9 +500,16 @@ export const TaskOrientationGenerator: React.FC<TaskOrientationGeneratorProps> =
 
       {/* Bottom subtle indicator */}
       <div className="pt-2 text-center border-t border-zinc-800/60 flex items-center justify-between text-[11px] text-zinc-500">
-        <div className="flex items-center space-x-1.5">
+        <div className="flex items-center space-x-2">
           <Layers className="w-3.5 h-3.5 text-zinc-400" />
-          <span>Task Pipeline</span>
+          <span>
+            Reported values:{' '}
+            <span className="font-mono text-zinc-300">
+              P1: {reportedPlayers.player1 === null ? 'null' : reportedPlayers.player1} |{' '}
+              P2: {reportedPlayers.player2 === null ? 'null' : reportedPlayers.player2} |{' '}
+              P3: {reportedPlayers.player3 === null ? 'null' : reportedPlayers.player3}
+            </span>
+          </span>
         </div>
         <span className="font-mono text-zinc-400 uppercase text-[10px]">
           {hasGenerated ? `Round ${activeRoundNumber} Active` : 'Ready'}
