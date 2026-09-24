@@ -5,6 +5,8 @@ import { LoginPage } from './pages/LoginPage.js';
 import { OnboardingPage } from './pages/OnboardingPage.js';
 import { WorkspaceHomePage } from './pages/WorkspaceHomePage.js';
 import { ProtectedRoute, OnboardingRoute, PublicOnlyRoute } from './components/AuthGuard.js';
+import Task4MonitorPage from './pages/Task4MonitorPage.js';
+import Task4PlayerPage from './pages/Task4PlayerPage.js';
 
 export const App: React.FC = () => {
   return (
@@ -50,6 +52,11 @@ export const App: React.FC = () => {
               </ProtectedRoute>
             }
           />
+
+          {/* Task 4 – Sound Relay Challenge (public game routes) */}
+          <Route path="/task4/monitor" element={<Task4MonitorPage />} />
+          <Route path="/task4/player/:slot" element={<Task4PlayerPage />} />
+          <Route path="/task4" element={<Navigate to="/task4/monitor" replace />} />
 
           {/* Catch-all redirect */}
           <Route path="*" element={<Navigate to="/" replace />} />
