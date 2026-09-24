@@ -6,12 +6,10 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  avatarUrl?: string;
   googleId: string;
   hasOnboarded: boolean;
   teamId?: string;
   taskspaceName?: string;
-  workspaceName?: string; // backwards compatibility
   createdAt?: string;
   updatedAt?: string;
 }
@@ -58,4 +56,27 @@ export interface GoogleTokenPayload {
   picture?: string;
   given_name?: string;
   family_name?: string;
+}
+
+export type TaskType =
+  | 'orientation'
+  | 'spec_review'
+  | 'agent_pipeline'
+  | 'code_review'
+  | 'deployment'
+  | 'custom';
+
+export type TaskStatus = 'pending' | 'in_progress' | 'completed';
+
+export interface TaskItem<T = Record<string, unknown>> {
+  id: string;
+  title: string;
+  description: string;
+  type: TaskType;
+  status: TaskStatus;
+  pipelineStage: number;
+  assignedTo?: string;
+  data: T;
+  createdAt?: string;
+  updatedAt?: string;
 }

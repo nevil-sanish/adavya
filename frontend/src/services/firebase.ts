@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { getFirestore, doc, setDoc } from 'firebase/firestore';
 import { User, AuthResponse } from '../types/auth.js';
 
 const firebaseConfig = {
@@ -32,6 +33,7 @@ const firebaseConfig = {
 // Initialize Firebase safely
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 
 // Force account picker prompt
@@ -41,9 +43,12 @@ googleProvider.setCustomParameters({
 
 const STORAGE_KEY_USER = 'adavya_auth_user';
 const STORAGE_KEY_TOKEN = 'adavya_auth_token';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 /**
- * Sign in using Firebase Google OAuth Popup with Gmail domain restriction
+ * Sign in using Firebase Google OAuth Popup with Gmail domain restriction.
+ * Persists user data to Firestore database both via client SDK and backend API.
+ * Strict schema: no avatarUrl and no workspaceName.
  */
 export async function signInWithFirebaseGoogle(): Promise<AuthResponse> {
   try {
@@ -66,45 +71,61 @@ export async function signInWithFirebaseGoogle(): Promise<AuthResponse> {
     }
 
     const idToken = await fbUser.getIdToken();
+    const now = new Date().toISOString();
+    const userId = `usr_${fbUser.uid.substring(0, 10)}`;
 
-    // Check if existing user in storage
-    const existingRaw = localStorage.getItem(STORAGE_KEY_USER);
-    let existingUser: User | null = null;
-    if (existingRaw) {
-      try {
-        const parsed = JSON.parse(existingRaw) as User;
-        if (parsed.email === email || parsed.googleId === fbUser.uid) {
-          existingUser = parsed;
+    // Create fresh user instance on login with hasOnboarded: false
+    const user: User = {
+      id: userId,
+      email,
+      name: fbUser.displayName || email.split('@')[0],
+      googleId: fbUser.uid,
+      hasOnboarded: false, // Always initialize to false upon login
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    // 1. Direct Client-side Firestore persistence (creates fresh user instance with hasOnboarded: false)
+    try {
+      await setDoc(
+        doc(db, 'users', fbUser.uid),
+        {
+          ...user,
+          lastLoginAt: now,
         }
-      } catch {
-        // ignore
-      }
+      );
+      console.log(`[Firestore Client] New user instance created for ${email} with hasOnboarded=false in 'users/${fbUser.uid}'`);
+    } catch (clientFsErr) {
+      console.warn('[Firestore Client] Direct write error (backend will persist):', clientFsErr);
     }
 
-    const isNewUser = !existingUser;
-    const user: User = existingUser
-      ? {
-          ...existingUser,
-          name: fbUser.displayName || existingUser.name,
-          avatarUrl: fbUser.photoURL || existingUser.avatarUrl,
-          updatedAt: new Date().toISOString(),
+    // 2. Backend API call to verify token and persist via Firebase Admin
+    try {
+      const response = await fetch(`${API_URL}/api/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.user) {
+          user.id = data.user.id || user.id;
         }
-      : {
-          id: `usr_${fbUser.uid.substring(0, 10)}`,
-          email,
-          name: fbUser.displayName || email.split('@')[0],
-          avatarUrl: fbUser.photoURL || undefined,
-          googleId: fbUser.uid,
-          hasOnboarded: false,
-          createdAt: new Date().toISOString(),
-        };
+        console.log(`[Backend Auth] User verified and persisted by backend API with hasOnboarded=false`);
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.warn('[Backend Auth] Server responded with error:', errorData);
+      }
+    } catch (apiErr) {
+      console.warn('[Backend Auth] Server connection warning:', apiErr);
+    }
 
     localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
     localStorage.setItem(STORAGE_KEY_TOKEN, idToken);
 
     return {
       user,
-      isNewUser,
+      isNewUser: true,
       token: idToken,
     };
   } catch (error: unknown) {

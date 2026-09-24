@@ -1,4 +1,6 @@
 import { jwtDecode } from 'jwt-decode';
+import { doc, setDoc } from 'firebase/firestore';
+import { db } from './firebase.js';
 import {
   AuthResponse,
   GoogleTokenPayload,
@@ -86,41 +88,21 @@ export async function authenticateWithGoogle(idToken: string): Promise<AuthRespo
     );
   }
 
-  const existingRaw = localStorage.getItem(STORAGE_KEY_USER);
-  let existingUser: User | null = null;
-  if (existingRaw) {
-    try {
-      const parsed = JSON.parse(existingRaw) as User;
-      if (parsed.email === email || parsed.googleId === payload.sub) {
-        existingUser = parsed;
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  const isNewUser = !existingUser;
-  const user: User = existingUser
-    ? {
-        ...existingUser,
-        name: payload.name || existingUser.name,
-        avatarUrl: payload.picture || existingUser.avatarUrl,
-        updatedAt: new Date().toISOString(),
-      }
-    : {
-        id: `usr_${Math.random().toString(36).substring(2, 10)}`,
-        email,
-        name: payload.name || email.split('@')[0],
-        avatarUrl: payload.picture,
-        googleId: payload.sub || `g_${Date.now()}`,
-        hasOnboarded: false,
-        createdAt: new Date().toISOString(),
-      };
+  const now = new Date().toISOString();
+  const user: User = {
+    id: `usr_${Math.random().toString(36).substring(2, 10)}`,
+    email,
+    name: payload.name || email.split('@')[0],
+    googleId: payload.sub || `g_${Date.now()}`,
+    hasOnboarded: false,
+    createdAt: now,
+    updatedAt: now,
+  };
 
   localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
   localStorage.setItem(STORAGE_KEY_TOKEN, idToken);
 
-  return { user, isNewUser, token: idToken };
+  return { user, isNewUser: true, token: idToken };
 }
 
 /**
@@ -146,7 +128,6 @@ export async function authenticateWithMockGoogle(options?: {
     id: 'usr_demo_1001',
     email,
     name: options?.name || 'Shubham Biswal',
-    avatarUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(options?.name || 'Shubham')}&backgroundColor=18181b&textColor=f4f4f5`,
     googleId: 'g_demo_1234567890',
     hasOnboarded: false,
     createdAt: new Date().toISOString(),
@@ -160,7 +141,7 @@ export async function authenticateWithMockGoogle(options?: {
 
 /**
  * Option 1: Create a new Team Taskspace
- * Generates a Team ID and links the user.
+ * Generates a Team ID, persists to Firestore and backend, and links the user.
  */
 export async function createTeamTaskspace(request: CreateTeamRequest): Promise<OnboardingResponse> {
   const rawName = request.teamName.trim();
@@ -170,7 +151,7 @@ export async function createTeamTaskspace(request: CreateTeamRequest): Promise<O
 
   const generatedTeamId = generateTeamId(rawName);
 
-  await simulateDelay(500);
+  await simulateDelay(300);
 
   const stored = localStorage.getItem(STORAGE_KEY_USER);
   if (!stored) {
@@ -178,24 +159,62 @@ export async function createTeamTaskspace(request: CreateTeamRequest): Promise<O
   }
 
   const currentUser = JSON.parse(stored) as User;
+  const now = new Date().toISOString();
   const updatedUser: User = {
     ...currentUser,
     hasOnboarded: true,
     teamId: generatedTeamId,
     taskspaceName: rawName,
-    workspaceName: rawName,
-    updatedAt: new Date().toISOString(),
+    updatedAt: now,
   };
-
-  localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(updatedUser));
 
   const newTaskspace: TeamTaskspace = {
     teamId: generatedTeamId,
     name: rawName,
     ownerEmail: currentUser.email,
     membersCount: 1,
-    createdAt: new Date().toISOString(),
+    createdAt: now,
   };
+
+  // 1. Direct Client-side Firestore persistence
+  try {
+    await setDoc(doc(db, 'teams', generatedTeamId), newTaskspace, { merge: true });
+    if (currentUser.googleId) {
+      await setDoc(
+        doc(db, 'users', currentUser.googleId),
+        {
+          hasOnboarded: true,
+          teamId: generatedTeamId,
+          taskspaceName: rawName,
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+    }
+    console.log(`[Firestore Client] Team ${generatedTeamId} saved and user updated`);
+  } catch (fsErr) {
+    console.warn('[Firestore Client] Team persistence warning:', fsErr);
+  }
+
+  // 2. Backend API persistence
+  if (API_BASE_URL) {
+    try {
+      await fetch(`${API_BASE_URL}/api/teams/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teamName: rawName,
+          userEmail: currentUser.email,
+          googleId: currentUser.googleId,
+        }),
+      });
+      console.log(`[Backend API] Team created via backend API`);
+    } catch (apiErr) {
+      console.warn('[Backend API] Team create API call warning:', apiErr);
+    }
+  }
+
+  localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(updatedUser));
 
   return {
     user: updatedUser,
@@ -206,7 +225,7 @@ export async function createTeamTaskspace(request: CreateTeamRequest): Promise<O
 
 /**
  * Option 2: Join an existing Team Taskspace
- * Validates Team ID and links the user.
+ * Validates Team ID, persists to Firestore and backend, and links the user.
  */
 export async function joinTeamTaskspace(request: JoinTeamRequest): Promise<OnboardingResponse> {
   const validation = validateTeamIdFormat(request.teamId);
@@ -216,7 +235,7 @@ export async function joinTeamTaskspace(request: JoinTeamRequest): Promise<Onboa
 
   const normalizedTeamId = validation.normalizedValue;
 
-  await simulateDelay(500);
+  await simulateDelay(300);
 
   // Check known taskspaces or accept properly formatted IDs
   const matched = DEFAULT_TASKSPACES.find(
@@ -231,24 +250,65 @@ export async function joinTeamTaskspace(request: JoinTeamRequest): Promise<Onboa
   }
 
   const currentUser = JSON.parse(stored) as User;
+  const now = new Date().toISOString();
   const updatedUser: User = {
     ...currentUser,
     hasOnboarded: true,
     teamId: normalizedTeamId,
     taskspaceName,
-    workspaceName: taskspaceName,
-    updatedAt: new Date().toISOString(),
+    updatedAt: now,
   };
+
+  const joinedTaskspace: TeamTaskspace = {
+    teamId: normalizedTeamId,
+    name: taskspaceName,
+    membersCount: (matched?.membersCount || 1) + 1,
+    createdAt: now,
+  };
+
+  // 1. Direct Client-side Firestore persistence
+  try {
+    await setDoc(doc(db, 'teams', normalizedTeamId), joinedTaskspace, { merge: true });
+    if (currentUser.googleId) {
+      await setDoc(
+        doc(db, 'users', currentUser.googleId),
+        {
+          hasOnboarded: true,
+          teamId: normalizedTeamId,
+          taskspaceName,
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+    }
+    console.log(`[Firestore Client] Joined team ${normalizedTeamId} and updated user`);
+  } catch (fsErr) {
+    console.warn('[Firestore Client] Team join persistence warning:', fsErr);
+  }
+
+  // 2. Backend API persistence
+  if (API_BASE_URL) {
+    try {
+      await fetch(`${API_BASE_URL}/api/teams/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teamId: normalizedTeamId,
+          userEmail: currentUser.email,
+          googleId: currentUser.googleId,
+        }),
+      });
+      console.log(`[Backend API] Joined team via backend API`);
+    } catch (apiErr) {
+      console.warn('[Backend API] Team join API call warning:', apiErr);
+    }
+  }
 
   localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(updatedUser));
 
   return {
     user: updatedUser,
-    taskspace: {
-      teamId: normalizedTeamId,
-      name: taskspaceName,
-      membersCount: (matched?.membersCount || 1) + 1,
-    },
+    taskspace: joinedTaskspace,
     message: `Joined team taskspace ${normalizedTeamId}`,
   };
 }

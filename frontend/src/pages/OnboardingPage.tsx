@@ -58,17 +58,9 @@ export const OnboardingPage: React.FC = () => {
       {/* Subtle top account bar */}
       <div className="w-full max-w-sm flex justify-between items-center mb-8">
         <div className="flex items-center space-x-2.5">
-          {user?.avatarUrl ? (
-            <img
-              src={user.avatarUrl}
-              alt={user.name}
-              className="w-7 h-7 rounded-full border border-zinc-800 object-cover"
-            />
-          ) : (
-            <div className="w-7 h-7 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-[11px] text-zinc-300">
-              {user?.name?.charAt(0) || 'U'}
-            </div>
-          )}
+          <div className="w-7 h-7 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-[11px] font-medium text-zinc-300">
+            {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+          </div>
           <span className="text-xs text-zinc-400 font-medium truncate max-w-[140px]">
             {user?.name}
           </span>

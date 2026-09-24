@@ -116,7 +116,7 @@ export const WorkspaceHomePage: React.FC = () => {
 
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
 
-  const currentTaskspaceName = user?.taskspaceName || user?.workspaceName || 'Core Intelligence';
+  const currentTaskspaceName = user?.taskspaceName || 'Core Intelligence';
   const currentTeamId = user?.teamId || 'TEAM-ALPHA';
 
   return (

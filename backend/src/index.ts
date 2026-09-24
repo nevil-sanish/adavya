@@ -1,0 +1,79 @@
+import express, { Request, Response, NextFunction } from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import { initializeFirebaseAdmin } from './config/firebase.js';
+import { authRouter } from './routes/auth.routes.js';
+import { teamRouter } from './routes/team.routes.js';
+import { taskRouter } from './routes/task.routes.js';
+
+// Load environment variables
+dotenv.config();
+
+// Initialize Firebase Admin
+initializeFirebaseAdmin();
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+// Middleware
+app.use(
+  cors({
+    origin: [FRONTEND_URL, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
+
+app.use(express.json());
+
+// Request logger
+app.use((req, _res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
+// Health check endpoint
+app.get('/api/health', (_req: Request, res: Response) => {
+  res.status(200).json({
+    status: 'ok',
+    service: 'adavya-backend',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
+});
+
+// API Routes
+app.use('/api/auth', authRouter);
+app.use('/api/teams', teamRouter);
+app.use('/api/tasks', taskRouter);
+
+// 404 handler
+app.use((req: Request, res: Response) => {
+  res.status(404).json({
+    error: 'NOT_FOUND',
+    message: `Endpoint ${req.method} ${req.url} does not exist.`,
+  });
+});
+
+// Global error handler
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  console.error('[Server Error]', err);
+  const message = err instanceof Error ? err.message : 'Internal Server Error';
+  res.status(500).json({
+    error: 'INTERNAL_SERVER_ERROR',
+    message,
+  });
+});
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`===============================================`);
+  console.log(`🚀 Adavya Backend listening on http://localhost:${PORT}`);
+  console.log(`🌍 Accepting CORS from: ${FRONTEND_URL}`);
+  console.log(`⚡ Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`===============================================`);
+});
+
+export default app;
