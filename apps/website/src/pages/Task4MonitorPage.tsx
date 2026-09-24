@@ -16,7 +16,7 @@ import {
 const SLOTS: PlayerSlot[] = ["b", "c", "d"];
 const SLOT_LABELS: Record<PlayerSlot, string> = { b: "Player B", c: "Player C", d: "Player D" };
 
-function dBBar(level: number, target: number, tolerance: number): number {
+function dBBar(level: number, target: number, _tolerance: number): number {
   const distance = Math.abs(level - target);
   return Math.max(0, Math.round(((50 - distance) / 50) * 100));
 }

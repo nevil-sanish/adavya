@@ -35,7 +35,7 @@ export function initializeFirebaseAdmin(): admin.app.App {
       console.log(`[Firebase Admin] Initialized with Service Account for ${projectId}`);
     } else {
       if (clientEmail || privateKey) {
-        throw new Error('Set both FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in backend/.env.');
+        throw new Error('Set both FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in apps/api/.env.');
       }
       admin.initializeApp({
         projectId,

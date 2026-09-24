@@ -1,0 +1,13 @@
+{
+  "name": "adavya",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "setup": "npm ci --prefix apps/website && npm ci --prefix apps/mobile && npm ci --prefix apps/api",
+    "dev:website": "npm run dev --prefix apps/website",
+    "dev:mobile": "npm run dev --prefix apps/mobile",
+    "dev:api": "npm run dev --prefix apps/api",
+    "build": "npm run build --prefix apps/website && npm run build --prefix apps/mobile && npm run build --prefix apps/api",
+    "test:api": "npm run build --prefix apps/api && node --test apps/api/tests/*.test.mjs"
+  }
+}

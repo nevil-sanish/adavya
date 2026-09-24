@@ -305,10 +305,6 @@ export async function logoutSession(): Promise<void> {
   localStorage.removeItem(STORAGE_KEY_TOKEN);
 }
 
-function simulateDelay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 export interface RoundVerifyResult {
   correct: boolean;
   message: string;

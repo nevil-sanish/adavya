@@ -6,7 +6,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { Round1CodeEntry } from './Round1CodeEntry.js';
-import { doc, setDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, setDoc, collection, getDocs, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../services/firebase.js';
 import { useAuth } from '../context/AuthContext.js';
 import { RoundInstance } from '../types/auth.js';

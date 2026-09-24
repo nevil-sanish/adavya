@@ -44,7 +44,7 @@ export const Task4PlayerPage: React.FC = () => {
   const [loadingSession, setLoadingSession] = useState(true);
   const [micState, setMicState] = useState<MicState>("idle");
   const [liveDB, setLiveDB] = useState(0);
-  const [justCorrect, setJustCorrect] = useState(false);
+  const [, setJustCorrect] = useState(false);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
