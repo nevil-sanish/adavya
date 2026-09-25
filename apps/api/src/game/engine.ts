@@ -12,6 +12,7 @@ import type { ActionPlan, TaskModule, TeamContext } from './tasks/types.js';
 import {
   REQUIRED_MEMBERS,
   TASK_ORDER,
+  taskPlanFor,
   type CaptainLogEntry,
   type CompetitionDoc,
   type MemberDoc,
@@ -108,9 +109,10 @@ function writeRunStart(ctx: TeamContext, prepared: PreparedStart, startedAt: Tim
 }
 
 /**
- * The captain starts task01 once the team has exactly four members. This locks
- * the team: no more joins, and no display-name changes. Every task's
- * configuration is checked first so a later automatic start cannot fail.
+ * The captain starts the first task once the team has exactly four members. This
+ * locks the team: no more joins, and no display-name changes. The team's task plan
+ * (every task not skipped) is fixed here, and each planned task's configuration is
+ * checked first so a later automatic start cannot fail.
  */
 export async function startFirstTask(db: Firestore, uid: string): Promise<{ started: boolean }> {
   return runGameTransaction(db, async (tx) => {
@@ -125,16 +127,14 @@ export async function startFirstTask(db: Firestore, uid: string): Promise<{ star
       throw new GameError('COMPETITION_NOT_ACTIVE', 'The competition has not opened yet. An organizer must set it to ACTIVE in /admin.', 409);
     }
 
-    let first: PreparedStart | null = null;
-    for (const taskId of TASK_ORDER) {
-      const prepared = await prepareStart(ctx, taskId);
-      if (taskId === 'task01') first = prepared;
-    }
+    const taskPlan = taskPlanFor(comp);
+    const prepared: PreparedStart[] = [];
+    for (const taskId of taskPlan) prepared.push(await prepareStart(ctx, taskId));
 
     const now = Timestamp.fromMillis(nowMs());
-    tx.update(ctx.r.team(ctx.cid, ctx.teamId), { status: 'IN_PROGRESS', lockedAt: now, currentTaskId: 'task01' });
+    tx.update(ctx.r.team(ctx.cid, ctx.teamId), { status: 'IN_PROGRESS', lockedAt: now, currentTaskId: taskPlan[0], taskPlan });
     tx.set(ctx.r.captainSummary(ctx.cid, ctx.teamId), { totalScore: 0, tasks: {} });
-    writeRunStart(ctx, first!, now);
+    writeRunStart(ctx, prepared[0], now);
     return { started: true };
   });
 }
@@ -274,7 +274,8 @@ async function prepareCompletion(ctx: TeamContext, taskId: TaskId): Promise<Prep
   const [compSnap, rankingSnap] = await ctx.tx.getAll(ctx.r.competition(ctx.cid), ctx.r.taskResult(ctx.cid, taskId));
   const policy = (compSnap.data() as CompetitionDoc | undefined)?.scoringPolicy ?? DEFAULT_SCORING_POLICY;
   const ranking = rankingSnap.data() ?? {};
-  const nextTaskId = TASK_ORDER[TASK_ORDER.indexOf(taskId) + 1];
+  const plan = ctx.team.taskPlan ?? TASK_ORDER;
+  const nextTaskId = plan[plan.indexOf(taskId) + 1];
   const next = nextTaskId ? await prepareStart(ctx, nextTaskId) : null;
 
   const completionMs = nowMs();

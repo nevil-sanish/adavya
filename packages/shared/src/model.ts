@@ -85,6 +85,13 @@ export interface Team {
   memberCount: number;
   requiredMembers: number;
   currentTaskId: TaskId | null;
+  /** Tasks this team plays, fixed when the captain starts (skipped tasks left out). */
+  taskPlan?: TaskId[];
+}
+
+/** The tasks a team plays, in order. Teams started before task plans existed play all six. */
+export function teamTasks(team: Pick<Team, 'taskPlan'>): readonly TaskId[] {
+  return team.taskPlan ?? TASK_ORDER;
 }
 
 export interface Member {

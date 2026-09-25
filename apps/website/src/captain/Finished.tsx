@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Flag, Trophy } from 'lucide-react';
-import { ApiError, formatDuration, TASK_META, TASK_ORDER, type CaptainSummary, type Leaderboards, type TaskId } from '@adavya/shared';
+import { ApiError, formatDuration, TASK_META, type CaptainSummary, type Leaderboards, type TaskId } from '@adavya/shared';
 import { api } from '../services/api.js';
 import { Banner, Card } from '../components/ui.js';
 
@@ -29,14 +29,14 @@ function useLeaderboards(): { boards: Leaderboards | null; error: string | null 
 
 const rowClass = (mine: boolean) => `border-t border-zinc-800 ${mine ? 'bg-amber-400/10 text-amber-100' : ''}`;
 
-export const Finished: React.FC<{ summary: CaptainSummary | null; teamId: string }> = ({ summary, teamId }) => {
+export const Finished: React.FC<{ summary: CaptainSummary | null; teamId: string; tasks: readonly TaskId[] }> = ({ summary, teamId, tasks }) => {
   const { boards, error } = useLeaderboards();
   const myPoints = boards?.points.find((s) => s.teamId === teamId);
   const myFinish = boards?.finishOrder.find((s) => s.teamId === teamId);
 
   return (
     <div className="space-y-4">
-      <Card title="All six tasks complete" aside={<Trophy className="h-4 w-4 text-amber-300" />}>
+      <Card title="All tasks complete" aside={<Trophy className="h-4 w-4 text-amber-300" />}>
         <div className="flex flex-wrap items-end gap-x-10 gap-y-2">
           <p className="text-4xl font-semibold">
             {summary?.totalScore ?? 0} <span className="text-base text-zinc-400">points</span>
@@ -53,7 +53,7 @@ export const Finished: React.FC<{ summary: CaptainSummary | null; teamId: string
             <tr><th className="py-1">Task</th><th>Rank</th><th>Points</th></tr>
           </thead>
           <tbody>
-            {TASK_ORDER.map((id) => (
+            {tasks.map((id) => (
               <tr key={id} className="border-t border-zinc-800">
                 <td className="py-1.5">{TASK_META[id].title}</td>
                 <td>{summary?.tasks[id]?.rank ?? '—'}</td>
@@ -106,7 +106,7 @@ export const Finished: React.FC<{ summary: CaptainSummary | null; teamId: string
                 ))}
               </tbody>
             </table>
-            <p className="mt-2 text-xs text-zinc-500">Time from starting Task 1 to completing Task 6. Updates as other teams finish.</p>
+            <p className="mt-2 text-xs text-zinc-500">Time from starting the first task to completing the last. Updates as other teams finish.</p>
           </Card>
         </div>
       )}

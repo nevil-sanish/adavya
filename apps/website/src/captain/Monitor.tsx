@@ -1,6 +1,6 @@
 import React from 'react';
 import { CheckCircle2 } from 'lucide-react';
-import { TASK_META, TASK_ORDER, type CaptainLogEntry, type CaptainSummary, type CaptainView, type Member, type TaskId, type TaskRun } from '@adavya/shared';
+import { TASK_META, type CaptainLogEntry, type CaptainSummary, type CaptainView, type Member, type TaskId, type TaskRun } from '@adavya/shared';
 import { useDoc } from '../hooks/useFirestore.js';
 import { useNow } from '../hooks/usePresence.js';
 import { paths } from '../services/paths.js';
@@ -30,8 +30,9 @@ const PANELS: Record<TaskId, React.FC<PanelProps<any>>> = {
 };
 
 /** Captain monitor for the current task. Mounted per task id, so listeners follow the task. */
-export const Monitor: React.FC<TeamProps & { taskId: TaskId; members: Member[]; summary: CaptainSummary | null }> = ({
+export const Monitor: React.FC<TeamProps & { taskId: TaskId; tasks: readonly TaskId[]; members: Member[]; summary: CaptainSummary | null }> = ({
   taskId,
+  tasks,
   members,
   summary,
   ...team
@@ -39,8 +40,8 @@ export const Monitor: React.FC<TeamProps & { taskId: TaskId; members: Member[]; 
   const now = useNow();
   const run = useDoc<TaskRun>(paths.run(team.cid, team.teamId, taskId));
   const view = useDoc<CaptainView>(paths.captainView(team.cid, team.teamId, taskId));
-  const index = TASK_ORDER.indexOf(taskId);
-  const previous = index > 0 ? summary?.tasks[TASK_ORDER[index - 1]] : undefined;
+  const index = tasks.indexOf(taskId);
+  const previous = index > 0 ? summary?.tasks[tasks[index - 1]] : undefined;
   const offline = offlineMembers(members, now).filter((m) => m.uid !== team.uid);
   const Panel = PANELS[taskId];
 
@@ -50,8 +51,8 @@ export const Monitor: React.FC<TeamProps & { taskId: TaskId; members: Member[]; 
 
   return (
     <div className="space-y-4">
-      <ol className="grid grid-cols-6 gap-2" aria-label="Task progress">
-        {TASK_ORDER.map((id, i) => {
+      <ol className="grid gap-2" style={{ gridTemplateColumns: `repeat(${tasks.length}, minmax(0, 1fr))` }} aria-label="Task progress">
+        {tasks.map((id, i) => {
           const done = summary?.tasks[id];
           const current = id === taskId;
           return (
@@ -75,7 +76,7 @@ export const Monitor: React.FC<TeamProps & { taskId: TaskId; members: Member[]; 
 
       {previous && index > 0 && Date.now() - previous.completedAtMs < 20_000 && (
         <Banner tone="success">
-          {TASK_META[TASK_ORDER[index - 1]].title} complete — rank {previous.rank}, +{previous.points} points. {TASK_META[taskId].title} has started.
+          {TASK_META[tasks[index - 1]].title} complete — rank {previous.rank}, +{previous.points} points. {TASK_META[taskId].title} has started.
         </Banner>
       )}
       {offline.length > 0 && (

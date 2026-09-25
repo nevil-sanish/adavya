@@ -30,7 +30,8 @@ export async function openCompetition(db, cid) {
   await ensureCompetition(db, cid, 'Test Cup');
   await setLocations(db, cid, { locations: LOCATIONS });
   await setAssignment(db, cid, '_default', ASSIGNMENT);
-  await updateCompetition(db, cid, { status: 'ACTIVE' });
+  // Suites play all six tasks; skip-tasks.test.mjs covers the default skip.
+  await updateCompetition(db, cid, { status: 'ACTIVE', skippedTasks: [] });
 }
 
 let userCounter = 0;

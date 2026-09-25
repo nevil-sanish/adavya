@@ -8,7 +8,7 @@ import { taskModule, TASKS } from '../game/tasks/index.js';
 import { computeLeaderboards } from './leaderboard.service.js';
 import { formableWords } from '../game/words.js';
 import { assignmentProblem, assignmentSchema, DEFAULT_ASSIGNMENT, locationPoolSchema, type Assignment, type LocationConfig } from '../game/tasks/task02.js';
-import { TASK_ORDER, type CompetitionDoc, type MemberDoc, type TeamDoc } from '../game/types.js';
+import { TASK_ORDER, taskPlanFor, type CompetitionDoc, type MemberDoc, type TeamDoc } from '../game/types.js';
 
 export const scoringPolicySchema = z.object({
   pointsByRank: z.record(z.string().regex(/^\d+$/), z.number().min(0).max(100_000)),
@@ -20,6 +20,10 @@ const competitionPatchSchema = z.object({
   name: z.string().trim().min(1).max(80).optional(),
   status: z.enum(['DRAFT', 'ACTIVE', 'CLOSED']).optional(),
   scoringPolicy: scoringPolicySchema.optional(),
+  skippedTasks: z
+    .array(z.enum(TASK_ORDER))
+    .refine((ids) => new Set(ids).size < TASK_ORDER.length, 'At least one task must be played')
+    .optional(),
 });
 
 /** Creates the competition document and public task definitions if missing. Safe to re-run. */
@@ -192,7 +196,9 @@ export async function getOverview(db: Firestore, cid: string) {
   return {
     competitionId: cid,
     leaderboards: await computeLeaderboards(db, cid),
-    competition: comp ? { name: comp.name, status: comp.status, scoringPolicy: comp.scoringPolicy, taskOrder: comp.taskOrder } : null,
+    competition: comp
+      ? { name: comp.name, status: comp.status, scoringPolicy: comp.scoringPolicy, taskOrder: comp.taskOrder, taskPlan: taskPlanFor(comp) }
+      : null,
     locations,
     locationsProblem: pool.success ? null : pool.error.errors[0]?.message ?? 'Invalid locations',
     assignments: Object.fromEntries(assignments),
@@ -227,7 +233,7 @@ export async function resetCompetition(db: Firestore, cid: string, keepTeams: bo
     await db.recursiveDelete(teamDoc.ref.collection('private'));
     await db.recursiveDelete(teamDoc.ref.collection('captain'));
     if (keepTeams) {
-      await teamDoc.ref.update({ status: 'LOBBY', currentTaskId: null, lockedAt: null, completedAt: null });
+      await teamDoc.ref.update({ status: 'LOBBY', currentTaskId: null, taskPlan: FieldValue.delete(), lockedAt: null, completedAt: null });
       continue;
     }
     const members = await r.members(cid, teamDoc.id).get();

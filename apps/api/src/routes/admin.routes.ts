@@ -16,7 +16,7 @@ adminRouter.get(
   })
 );
 
-/** PUT /api/admin/competition  { name?, status?, scoringPolicy? } */
+/** PUT /api/admin/competition  { name?, status?, scoringPolicy?, skippedTasks? } */
 adminRouter.put(
   '/competition',
   route(async (req, res) => {

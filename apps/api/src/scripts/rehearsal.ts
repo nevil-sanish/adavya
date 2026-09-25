@@ -17,7 +17,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { activeCompetitionId } from '../config/env.js';
 import { refs } from '../game/refs.js';
 import { DEFAULT_SCORING_POLICY, placeCompletion } from '../game/scoring.js';
-import { TASK_ORDER, type CompetitionDoc, type RankingGroup, type TaskId } from '../game/types.js';
+import { taskPlanFor, type CompetitionDoc, type RankingGroup, type TaskId } from '../game/types.js';
 import { ensureCompetition, setAssignment, setLocations, updateCompetition } from '../services/admin.service.js';
 import { flag, scriptDb } from './cli.js';
 import fs from 'fs';
@@ -164,6 +164,8 @@ await ensureCompetition(db, cid, 'Rehearsal Cup');
 await setLocations(db, cid, { locations: JSON.parse(fs.readFileSync(new URL('../../config/locations.sample.json', import.meta.url), 'utf8')) });
 await setAssignment(db, cid, '_default', JSON.parse(fs.readFileSync(new URL('../../config/assignment.sample.json', import.meta.url), 'utf8')));
 await updateCompetition(db, cid, { status: 'ACTIVE' });
+// Teams play every task the competition does not skip.
+const plan = taskPlanFor((await refs(db).competition(cid).get()).data() as CompetitionDoc);
 
 const health = await fetch(`${API}/api/health`).then((x) => x.ok).catch(() => false);
 if (!health) {
@@ -215,7 +217,7 @@ if (teams.length > 1) {
 
 await Promise.all(
   teams.map(async (t) => {
-    for (const taskId of TASK_ORDER) await play(t, taskId);
+    for (const taskId of plan) await play(t, taskId);
   })
 );
 clearInterval(heartbeat);
@@ -223,7 +225,7 @@ console.log(`   played in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 
 console.log('\n3. Verification');
 const policy = ((await r.competition(cid).get()).data() as CompetitionDoc).scoringPolicy ?? DEFAULT_SCORING_POLICY;
-for (const taskId of TASK_ORDER) {
+for (const taskId of plan) {
   const completions = (await r.taskResult(cid, taskId).collection('completions').orderBy('completedAtMs').get()).docs
     .map((d) => d.data())
     .filter((c) => teams.some((t) => t.teamId === c.teamId));
@@ -249,7 +251,7 @@ for (const taskId of TASK_ORDER) {
 for (const t of teams) {
   const team = (await r.team(cid, t.teamId).get()).data()!;
   const summary = (await r.captainSummary(cid, t.teamId).get()).data()!;
-  const sum = TASK_ORDER.reduce((s, id) => s + (summary.tasks[id]?.points ?? 0), 0);
+  const sum = plan.reduce((s, id) => s + (summary.tasks[id]?.points ?? 0), 0);
   check(team.status === 'COMPLETED' && summary.totalScore === sum, `${t.name}: completed; total ${summary.totalScore} = sum of task points`);
   check(t.duplicatesRejected === 1, `${t.name}: replayed event returned as duplicate, applied once`);
   const task01Log = (await r.captainView(cid, t.teamId, 'task01').get()).data()!.log as Array<{ kind: string }>;
@@ -259,7 +261,7 @@ for (const t of teams) {
 console.log('\nLeaderboard');
 for (const t of teams) {
   const s = (await r.captainSummary(cid, t.teamId).get()).data()!;
-  console.log(`  ${t.name.padEnd(14)} ${String(s.totalScore).padStart(4)}  ${TASK_ORDER.map((id) => `${id}:#${s.tasks[id].rank}`).join(' ')}`);
+  console.log(`  ${t.name.padEnd(14)} ${String(s.totalScore).padStart(4)}  ${plan.map((id) => `${id}:#${s.tasks[id].rank}`).join(' ')}`);
 }
 
 if (failures.length) {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { LogOut } from 'lucide-react';
-import type { CaptainSummary, Member, Team } from '@adavya/shared';
+import { teamTasks, type CaptainSummary, type Member, type Team } from '@adavya/shared';
 import { useAuth } from '../context/AuthContext.js';
 import { useCollection, useDoc } from '../hooks/useFirestore.js';
 import { useOnline, usePresence } from '../hooks/usePresence.js';
@@ -66,9 +66,9 @@ export const CaptainApp: React.FC<TeamProps> = ({ cid, teamId, uid }) => {
 
         {t.status === 'LOBBY' && <Lobby team={t} members={members.data} />}
         {t.status === 'IN_PROGRESS' && t.currentTaskId && (
-          <Monitor key={t.currentTaskId} cid={cid} teamId={teamId} uid={uid} taskId={t.currentTaskId} members={members.data} summary={summary.data} />
+          <Monitor key={t.currentTaskId} cid={cid} teamId={teamId} uid={uid} taskId={t.currentTaskId} tasks={teamTasks(t)} members={members.data} summary={summary.data} />
         )}
-        {t.status === 'COMPLETED' && <Finished summary={summary.data} teamId={teamId} />}
+        {t.status === 'COMPLETED' && <Finished summary={summary.data} teamId={teamId} tasks={teamTasks(t)} />}
       </main>
     </div>
   );

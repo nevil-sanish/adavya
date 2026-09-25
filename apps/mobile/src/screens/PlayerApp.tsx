@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { isMemberOnline, SLOT_LABEL, TASK_META, TASK_ORDER, type Member, type PlayerView, type TaskId, type TaskRun, type Team } from '@adavya/shared';
+import { isMemberOnline, SLOT_LABEL, TASK_META, teamTasks, type Member, type PlayerView, type TaskId, type TaskRun, type Team } from '@adavya/shared';
 import { useAuth } from '../session.js';
 import { useCollection, useDoc } from '../hooks/useFirestore.js';
 import { useNow, useOnline, usePresence } from '../hooks/usePresence.js';
@@ -68,11 +68,11 @@ export const PlayerApp: React.FC<TeamProps> = ({ cid, teamId, uid }) => {
         <span><span className={`dot ${online && !team.fromCache ? 'on' : ''}`} />{online ? (team.fromCache ? 'Syncing' : 'Online') : 'Offline'}</span>
       </div>
       {!online && <Banner tone="warn">You are offline. Reconnect to continue; your progress is saved.</Banner>}
-      <CompletedBanner currentTaskId={t.currentTaskId} />
+      <CompletedBanner currentTaskId={t.currentTaskId} tasks={teamTasks(t)} />
 
       {t.status === 'LOBBY' && <Lobby team={t} members={members.data} />}
       {t.status === 'IN_PROGRESS' && t.currentTaskId && (
-        <CurrentTask key={t.currentTaskId} cid={cid} teamId={teamId} uid={uid} taskId={t.currentTaskId} paused={!captainOnline} online={online} />
+        <CurrentTask key={t.currentTaskId} cid={cid} teamId={teamId} uid={uid} taskId={t.currentTaskId} tasks={teamTasks(t)} paused={!captainOnline} online={online} />
       )}
       {t.status === 'COMPLETED' && (
         <>
@@ -88,7 +88,7 @@ export const PlayerApp: React.FC<TeamProps> = ({ cid, teamId, uid }) => {
 };
 
 /** Announces "Task N complete" for a few seconds when the team moves to the next task. */
-const CompletedBanner: React.FC<{ currentTaskId: TaskId | null }> = ({ currentTaskId }) => {
+const CompletedBanner: React.FC<{ currentTaskId: TaskId | null; tasks: readonly TaskId[] }> = ({ currentTaskId, tasks }) => {
   const previous = useRef(currentTaskId);
   const [done, setDone] = useState<TaskId | null>(null);
   useEffect(() => {
@@ -99,7 +99,7 @@ const CompletedBanner: React.FC<{ currentTaskId: TaskId | null }> = ({ currentTa
     const t = window.setTimeout(() => setDone(null), 8000);
     return () => window.clearTimeout(t);
   }, [currentTaskId]);
-  return done ? <Banner tone="ok">Task {TASK_ORDER.indexOf(done) + 1} · {TASK_META[done].title} complete!</Banner> : null;
+  return done ? <Banner tone="ok">Task {tasks.indexOf(done) + 1} · {TASK_META[done].title} complete!</Banner> : null;
 };
 
 const Lobby: React.FC<{ team: Team; members: Member[] }> = ({ team, members }) => {
@@ -125,7 +125,7 @@ const Lobby: React.FC<{ team: Team; members: Member[] }> = ({ team, members }) =
   );
 };
 
-const CurrentTask: React.FC<TeamProps & { taskId: TaskId; paused: boolean; online: boolean }> = ({ cid, teamId, uid, taskId, paused, online }) => {
+const CurrentTask: React.FC<TeamProps & { taskId: TaskId; tasks: readonly TaskId[]; paused: boolean; online: boolean }> = ({ cid, teamId, uid, taskId, tasks, paused, online }) => {
   const run = useDoc<TaskRun>(paths.run(cid, teamId, taskId));
   const view = useDoc<PlayerView>(paths.playerView(cid, teamId, taskId, uid));
   const runId = run.data?.runId;
@@ -147,7 +147,7 @@ const CurrentTask: React.FC<TeamProps & { taskId: TaskId; paused: boolean; onlin
   return (
     <>
       <div>
-        <p className="eyebrow">Task {TASK_ORDER.indexOf(taskId) + 1} of 6</p>
+        <p className="eyebrow">Task {tasks.indexOf(taskId) + 1} of {tasks.length}</p>
         <h1>{TASK_META[taskId].title}</h1>
       </div>
       <p className="muted">{TASK_META[taskId].player}</p>

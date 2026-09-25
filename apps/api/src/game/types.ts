@@ -3,6 +3,15 @@ import type { Timestamp } from 'firebase-admin/firestore';
 export const TASK_ORDER = ['task01', 'task02', 'task03', 'task04', 'task05', 'task06'] as const;
 export type TaskId = (typeof TASK_ORDER)[number];
 
+/** Tasks left out when the competition doc has no `skippedTasks`: teams go from task01 straight to task03. */
+export const DEFAULT_SKIPPED_TASKS: readonly TaskId[] = ['task02'];
+
+/** The tasks a team starting now plays, in order. */
+export function taskPlanFor(comp: Pick<CompetitionDoc, 'skippedTasks'> | undefined): TaskId[] {
+  const skipped = comp?.skippedTasks ?? DEFAULT_SKIPPED_TASKS;
+  return TASK_ORDER.filter((id) => !skipped.includes(id));
+}
+
 export type TaskType = 'ORIENTATION' | 'GPS_LETTER' | 'POSE_RELAY' | 'SOUND_RELAY' | 'RESPONSE_TIME' | 'MORSE_RELAY';
 
 export const PLAYER_SLOTS = ['player1', 'player2', 'player3'] as const;
@@ -22,6 +31,8 @@ export interface CompetitionDoc {
   name: string;
   status: 'DRAFT' | 'ACTIVE' | 'CLOSED';
   taskOrder: TaskId[];
+  /** Tasks no team plays; absent means DEFAULT_SKIPPED_TASKS. Applies to teams that start afterwards. */
+  skippedTasks?: TaskId[];
   scoringPolicy: ScoringPolicy;
   createdAt?: Timestamp;
   startedAt?: Timestamp | null;
@@ -51,6 +62,8 @@ export interface TeamDoc {
   memberCount: number;
   requiredMembers: number;
   currentTaskId: TaskId | null;
+  /** Tasks this team plays, fixed when the captain starts; absent means TASK_ORDER. */
+  taskPlan?: TaskId[];
   createdAt: Timestamp;
   lockedAt: Timestamp | null;
   completedAt: Timestamp | null;
