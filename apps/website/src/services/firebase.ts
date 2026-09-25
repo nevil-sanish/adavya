@@ -12,27 +12,21 @@ import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey:
-    import.meta.env.REACT_APP_FIREBASE_API_KEY ||
     import.meta.env.VITE_FIREBASE_API_KEY ||
     'AIzaSyCr-rQMekm9xGygaDJcD4ZPBD9y71KKqaU',
   authDomain:
-    import.meta.env.REACT_APP_FIREBASE_AUTH_DOMAIN ||
     import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ||
     'adavya-f796d.firebaseapp.com',
   projectId:
-    import.meta.env.REACT_APP_FIREBASE_PROJECT_ID ||
     import.meta.env.VITE_FIREBASE_PROJECT_ID ||
     'adavya-f796d',
   storageBucket:
-    import.meta.env.REACT_APP_FIREBASE_STORAGE_BUCKET ||
     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ||
     'adavya-f796d.firebasestorage.app',
   messagingSenderId:
-    import.meta.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID ||
     import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ||
     '252974229839',
   appId:
-    import.meta.env.REACT_APP_FIREBASE_APP_ID ||
     import.meta.env.VITE_FIREBASE_APP_ID ||
     '1:252974229839:web:b4baf7abac197f7694fd3a',
 };

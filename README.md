@@ -46,7 +46,7 @@ npm run dev:website  # http://localhost:5173  (captain, /admin)
 npm run dev:mobile   # http://localhost:5174  (players)
 ```
 
-Each app has a `.env.example`. Server secrets belong only in `apps/api/.env`, which is gitignored.
+All settings live in one file at the repository root: copy `.env.example` to `.env` (gitignored) and fill it in. The API and scripts read every key; the browser apps receive only `VITE_*` keys, so server secrets never reach a build. `.env.production` (committed, no secrets) holds the production build switches.
 
 ## Testing on a phone
 

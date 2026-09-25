@@ -297,12 +297,12 @@ Do not run destructive resets against shared or production Firebase projects. `n
 
 ## 5. Environment configuration
 
-Use environment-specific configuration. Each app has a `.env.example`:
+All settings are in one file at the repository root: `.env` (gitignored), documented in `.env.example`. The API and scripts read every key; Vite exposes only `VITE_*` keys to the browser apps. `.env.production` (committed) holds production build switches. Hosts set the same keys in their dashboard.
 
 | Setting | Where |
 |---|---|
-| Firebase project ID and service account | `apps/api/.env`: `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` (or ADC) |
-| Firebase web config | `apps/website/.env`, `apps/mobile/.env`: `VITE_FIREBASE_*` |
+| Firebase project ID and service account | `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` (or ADC) |
+| Firebase web config | `VITE_FIREBASE_*` |
 | Allowed email domain | `ALLOWED_EMAIL_DOMAIN` (API), `VITE_ALLOWED_EMAIL_DOMAIN` (clients), and `firebase/firestore.rules` |
 | Competition ID | `COMPETITION_ID` (API, default `main`) |
 | Admins | `ADMIN_EMAILS` (API, comma-separated) |

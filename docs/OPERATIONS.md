@@ -67,7 +67,7 @@ Firebase console:
 Configuration:
 
 - [ ] `apps/api` env: `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` (or ADC on Google Cloud), `COMPETITION_ID`, `ADMIN_EMAILS`, `ALLOWED_EMAIL_DOMAIN`, `FRONTEND_URL`, `MOBILE_URL` (exact HTTPS origins for CORS), `NODE_ENV=production`.
-- [ ] `apps/website/.env` and `apps/mobile/.env`: `VITE_FIREBASE_*`, `VITE_API_URL` (HTTPS), `VITE_ALLOWED_EMAIL_DOMAIN`, `VITE_PLAYER_APP_URL` (website), `VITE_USE_EMULATORS=false`.
+- [ ] Browser builds: `VITE_FIREBASE_*`, `VITE_ALLOWED_EMAIL_DOMAIN`, `VITE_PLAYER_APP_URL` (captain site). `VITE_API_URL` stays empty when the host forwards `/api` (Render rewrites, Firebase Hosting). Locally these come from the root `.env`; on a host, from its dashboard.
 - [ ] If the domain differs from `iiitkottayam.ac.in`, also edit `signedIn()` in `firebase/firestore.rules`.
 - [ ] Optional: host the pose model (`pose_landmarker_lite.task`) yourself and set `VITE_POSE_MODEL_URL`, so event Wi-Fi does not depend on Google's CDN.
 

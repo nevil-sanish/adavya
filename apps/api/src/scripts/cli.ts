@@ -1,10 +1,9 @@
-import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
 import { getDb, initializeFirebaseAdmin } from '../config/firebase.js';
+import { loadEnv } from '../config/load-env.js';
 
-/** Loads apps/api/.env and the Admin SDK for operator scripts. Honors FIRESTORE_EMULATOR_HOST. */
+/** Loads the repository's .env and the Admin SDK for operator scripts. Honors FIRESTORE_EMULATOR_HOST. */
 export function scriptDb() {
-  dotenv.config({ path: fileURLToPath(new URL('../../.env', import.meta.url)) });
+  loadEnv();
   initializeFirebaseAdmin();
   return getDb();
 }

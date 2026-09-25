@@ -4,7 +4,9 @@ dist/
 build/
 *.tsbuildinfo
 .env
-.env.local
+.env.*
+!.env.example
+!.env.production
 .DS_Store
 *serviceAccount*.json
 *firebase-adminsdk*.json
