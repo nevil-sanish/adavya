@@ -32,9 +32,9 @@ services:
       - key: ALLOWED_EMAIL_DOMAIN
         value: iiitkottayam.ac.in
       - key: FRONTEND_URL
-        value: https://adavya-captain.onrender.com
+        value: https://adavya-web.onrender.com
       - key: MOBILE_URL
-        value: https://adavya-player.onrender.com
+        value: https://adavya-zqid.onrender.com
       # From a Firebase service-account key (Project settings → Service accounts). Entered in the dashboard.
       - key: FIREBASE_CLIENT_EMAIL
         sync: false
@@ -57,7 +57,7 @@ services:
       - key: NODE_VERSION
         value: "22"
       - key: VITE_PLAYER_APP_URL
-        value: https://adavya-player.onrender.com
+        value: https://adavya-zqid.onrender.com
     headers:
       - path: /assets/*
         name: Cache-Control
@@ -65,7 +65,7 @@ services:
     routes:
       - type: rewrite
         source: /api/*
-        destination: https://adavya-api.onrender.com/api/*
+        destination: https://adavya.onrender.com/api/*
       - type: rewrite
         source: /*
         destination: /index.html
@@ -89,7 +89,7 @@ services:
     routes:
       - type: rewrite
         source: /api/*
-        destination: https://adavya-api.onrender.com/api/*
+        destination: https://adavya.onrender.com/api/*
       - type: rewrite
         source: /*
         destination: /index.html

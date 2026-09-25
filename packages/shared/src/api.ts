@@ -41,7 +41,16 @@ export function createApi(baseUrl: string, getToken: () => Promise<string | null
     } catch {
       throw new ApiError('Cannot reach the game server. Check your connection.', 'NETWORK_ERROR', 0);
     }
-    const data = await response.json().catch(() => ({}));
+    // Every API response is JSON. Anything else (an HTML page, an empty body) means /api
+    // is not reaching the API — typically a missing /api/* rewrite on the static host.
+    const data = (await response.json().catch(() => null)) as { message?: string; error?: string } | null;
+    if (data === null || typeof data !== 'object') {
+      throw new ApiError(
+        `The game server did not answer (${response.status}). Check that /api is forwarded to the API.`,
+        'BAD_RESPONSE',
+        response.ok ? 502 : response.status
+      );
+    }
     if (!response.ok) {
       throw new ApiError(data.message || `Request failed (${response.status}).`, data.error || 'REQUEST_FAILED', response.status);
     }
