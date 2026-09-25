@@ -3,6 +3,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { GameError } from '../../lib/errors.js';
 import { newId } from '../../lib/random.js';
 import { distanceMeters } from '../geo.js';
+import { DEFAULT_ASSIGNMENT_WORDS, formableWords, randomAssignment } from '../words.js';
 import type { ActionContext, ActionPlan, TaskModule } from './types.js';
 
 export const LOCATION_COUNT = 10;
@@ -86,6 +87,13 @@ interface Task02Config {
   revealClassificationOnDiscovery: boolean;
   /** Show players the approximate distance to the nearest assigned location when close. */
   showDistance: boolean;
+  /**
+   * RANDOM: a team without its own assignment gets a random word (least used so far) and five
+   * random locations when it reaches Level 02. MANUAL: it uses the `_default` assignment.
+   */
+  assignmentMode: 'RANDOM' | 'MANUAL';
+  /** Candidate words for RANDOM mode; only words the ten location letters can spell are used. */
+  words: string[];
 }
 
 export interface AssignedLocation extends LocationConfig {
@@ -126,6 +134,8 @@ export const task02: TaskModule<Task02Config> = {
     acceptAnyOrder: false,
     revealClassificationOnDiscovery: false,
     showDistance: true,
+    assignmentMode: 'RANDOM',
+    words: DEFAULT_ASSIGNMENT_WORDS,
   },
   configSchema: z.object({
     maxAccuracyMeters: z.number().min(5).max(500),
@@ -138,20 +148,38 @@ export const task02: TaskModule<Task02Config> = {
     acceptAnyOrder: z.boolean(),
     revealClassificationOnDiscovery: z.boolean(),
     showDistance: z.boolean(),
+    assignmentMode: z.enum(['RANDOM', 'MANUAL']),
+    words: z.array(z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/, 'Words must be exactly three letters A-Z')).min(1),
   }),
 
-  /** Loads the pool and this team's assignment (or the default) and validates both. */
-  async loadInit(ctx) {
-    const [poolSnap, teamSnap, defaultSnap] = await Promise.all([
+  /**
+   * Loads the pool and this team's assignment: its own if the admin set one; otherwise a
+   * random one (RANDOM mode) or the `_default` (MANUAL mode). Validates the result.
+   */
+  async loadInit(ctx, config) {
+    const [poolSnap, teamSnap, defaultSnap, configSnap] = await Promise.all([
       ctx.tx.get(ctx.r.locations(ctx.cid)),
       ctx.tx.get(ctx.r.assignment(ctx.cid, ctx.teamId)),
       ctx.tx.get(ctx.r.assignment(ctx.cid, DEFAULT_ASSIGNMENT)),
+      ctx.tx.get(ctx.r.privateConfig(ctx.cid, 'task02')),
     ]);
     const pool = locationPoolSchema.safeParse(poolSnap.docs.map((d) => d.data()));
     if (!pool.success) {
       throw new GameError('COMPETITION_NOT_CONFIGURED', `Task 2 locations are not configured: ${pool.error.errors[0]?.message}`, 409);
     }
-    const raw = teamSnap.exists ? teamSnap.data() : defaultSnap.data();
+
+    let raw = teamSnap.data();
+    let randomWord: string | null = null;
+    if (!raw && config.assignmentMode === 'RANDOM') {
+      const used = (configSnap.data()?.usedWords as Record<string, number> | undefined) ?? {};
+      const generated = randomAssignment(pool.data, config.words, used);
+      if (!generated) {
+        throw new GameError('COMPETITION_NOT_CONFIGURED', 'No word in the Task 2 word list can be spelled with the ten location letters.', 409);
+      }
+      raw = generated;
+      randomWord = generated.word;
+    }
+    raw ??= defaultSnap.data();
     if (!raw) {
       throw new GameError('COMPETITION_NOT_CONFIGURED', 'Task 2 locations have not been assigned to your team yet. Ask the organizers.', 409);
     }
@@ -160,11 +188,11 @@ export const task02: TaskModule<Task02Config> = {
     if (!assignment.success || problem) {
       throw new GameError('COMPETITION_NOT_CONFIGURED', `Task 2 assignment for your team is invalid: ${problem}`, 409);
     }
-    return { pool: pool.data, assignment: assignment.data };
+    return { pool: pool.data, assignment: assignment.data, randomWord };
   },
 
   init(ctx, config, loaded) {
-    const { pool, assignment } = loaded as { pool: LocationConfig[]; assignment: Assignment };
+    const { pool, assignment, randomWord } = loaded as { pool: LocationConfig[]; assignment: Assignment; randomWord: string | null };
     const byId = new Map(pool.map((l) => [l.locationId, l]));
     const assigned: AssignedLocation[] = assignment.locationIds.map((id, i) => ({
       ...byId.get(id)!,
@@ -190,6 +218,10 @@ export const task02: TaskModule<Task02Config> = {
       },
       playerViews: Object.fromEntries(ctx.players.map((p) => [p.uid, { discoveries: [] }])),
       extraWrites(tx) {
+        // Record the random word so the next team is given a different one.
+        if (randomWord) {
+          tx.set(ctx.r.privateConfig(ctx.cid, 'task02'), { usedWords: { [randomWord]: FieldValue.increment(1) } }, { merge: true });
+        }
         for (const l of assigned) {
           // Captain sees the hint only: no coordinates, letter or classification.
           tx.set(ctx.r.run(ctx.cid, ctx.teamId, 'task02').collection('assignedLocations').doc(l.locationId), {

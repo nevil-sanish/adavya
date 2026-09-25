@@ -5,7 +5,7 @@ import { ApiError, formatDuration, SLOT_LABEL, TASK_META, TASK_ORDER, type Leade
 import { useAuth } from '../context/AuthContext.js';
 import { api } from '../services/api.js';
 import { Banner, Button, Card, FullScreenMessage } from '../components/ui.js';
-import { AssignmentsEditor, LocationsEditor, type AssignmentConfig, type LocationRow } from './Level02Admin.js';
+import { AssignmentsEditor, LocationsEditor, type AssignmentConfig, type LocationRow, type Task02Random } from './Level02Admin.js';
 
 interface Overview {
   competitionId: string;
@@ -14,6 +14,7 @@ interface Overview {
   locations: LocationRow[];
   locationsProblem: string | null;
   assignments: Record<string, AssignmentConfig>;
+  task02Random: Task02Random;
   taskConfigs: Record<TaskId, unknown>;
   teams: Array<{
     teamId: string;
@@ -23,7 +24,8 @@ interface Overview {
     currentTaskId: TaskId | null;
     memberCount: number;
     totalScore: number;
-    task02: { source: 'TEAM' | 'DEFAULT' | 'NONE'; problem: string | null };
+    task02: { source: 'TEAM' | 'RANDOM' | 'DEFAULT' | 'NONE'; problem: string | null };
+    task02Given: { word: string; locationIds: string[] } | null;
     members: Array<{ uid: string; displayName: string; slot: Slot; lastSeenAtMs: number | null }>;
   }>;
   results: Record<TaskId, Array<{ teamName: string; rank: number; points: number; completedAtMs: number; durationMs: number }>>;
@@ -77,7 +79,14 @@ export const AdminPage: React.FC = () => {
           <TeamsCard teams={data.teams} />
           <ResultsCard results={data.results} />
           <LocationsEditor locations={data.locations} problem={data.locationsProblem} onSaved={load} />
-          <AssignmentsEditor locations={data.locations} assignments={data.assignments} teams={data.teams} onSaved={load} />
+          <AssignmentsEditor
+            locations={data.locations}
+            assignments={data.assignments}
+            teams={data.teams}
+            random={data.task02Random}
+            task02Config={data.taskConfigs.task02 as Record<string, unknown>}
+            onSaved={load}
+          />
           <JsonEditor
             title="Scoring policy"
             initial={json(data.competition.scoringPolicy)}

@@ -24,7 +24,9 @@ export interface TeamReadiness {
   teamName: string;
   status: string;
   currentTaskId: string | null;
-  task02: { source: 'TEAM' | 'DEFAULT' | 'NONE'; problem: string | null };
+  task02: { source: 'TEAM' | 'RANDOM' | 'DEFAULT' | 'NONE'; problem: string | null };
+  /** What the team was given once it reached Level 02 (✓ marks correct locations). */
+  task02Given: { word: string; locationIds: string[] } | null;
 }
 
 const DEFAULT_KEY = '_default';
@@ -192,7 +194,7 @@ const AssignmentForm: React.FC<{
     try {
       await api.admin.deleteAssignment(keyName);
       setDirty(false);
-      setStatus({ tone: 'success', text: 'Removed: this team now uses the default.' });
+      setStatus({ tone: 'success', text: 'Removed: this team goes back to random (or the default in manual mode).' });
       onSaved();
     } catch (err) {
       setStatus({ tone: 'error', text: errorOf(err) });
@@ -239,44 +241,110 @@ const AssignmentForm: React.FC<{
           />
         </label>
         <Button onClick={save} busy={busy}>Save</Button>
-        {removable && <Button variant="secondary" onClick={remove} disabled={busy}>Use default</Button>}
+        {removable && <Button variant="secondary" onClick={remove} disabled={busy}>Remove own assignment</Button>}
         {status && <span className={status.tone === 'error' ? 'text-red-300' : 'text-emerald-300'}>{status.text}</span>}
       </div>
     </div>
   );
 };
 
+export interface Task02Random {
+  mode: 'RANDOM' | 'MANUAL';
+  spellableWords: string[];
+  usedWords: Record<string, number>;
+}
+
+const SOURCE_LABEL: Record<TeamReadiness['task02']['source'], string> = {
+  TEAM: 'own assignment',
+  RANDOM: 'random',
+  DEFAULT: 'default',
+  NONE: '—',
+};
+
 /**
- * Per-team assignment: five of the ten locations, three correct (their letters
- * form the word) and two decoys. `_default` covers every team without its own.
- * A team cannot start until its assignment is valid.
+ * How teams get their five locations and word. RANDOM (default): each team without
+ * its own assignment gets a random, least-used word when it reaches Level 02.
+ * MANUAL: every such team gets the `_default`. A team's own assignment always wins.
  */
 export const AssignmentsEditor: React.FC<{
   locations: LocationRow[];
   assignments: Record<string, AssignmentConfig>;
   teams: TeamReadiness[];
+  random: Task02Random;
+  task02Config: Record<string, unknown>;
   onSaved: () => void;
-}> = ({ locations, assignments, teams, onSaved }) => {
+}> = ({ locations, assignments, teams, random, task02Config, onSaved }) => {
   const [openTeam, setOpenTeam] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const ready = teams.filter((t) => !t.task02.problem).length;
+  const isRandom = random.mode === 'RANDOM';
+
+  const setMode = async (mode: 'RANDOM' | 'MANUAL') => {
+    setBusy(true);
+    setError(null);
+    try {
+      // The endpoint replaces the whole task02 configuration, so send the current values with the new mode.
+      await api.admin.setTaskConfig('task02', { ...task02Config, assignmentMode: mode });
+      onSaved();
+    } catch (err) {
+      setError(errorOf(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <Card title="Level 02 · Team assignments" aside={`${ready} / ${teams.length} teams ready`}>
       {locations.length !== 10 ? (
         <Banner tone="warning">Configure the ten locations first.</Banner>
       ) : (
         <div className="space-y-4">
-          <AssignmentForm keyName={DEFAULT_KEY} label="Default (every team without its own)" locations={locations} initial={assignments[DEFAULT_KEY]} removable={false} onSaved={onSaved} />
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-zinc-400">Teams without their own assignment get:</span>
+            <Button variant={isRandom ? 'primary' : 'secondary'} disabled={busy || isRandom} onClick={() => setMode('RANDOM')}>
+              A random word and 5 locations
+            </Button>
+            <Button variant={!isRandom ? 'primary' : 'secondary'} disabled={busy || !isRandom} onClick={() => setMode('MANUAL')}>
+              The default assignment
+            </Button>
+          </div>
+          {error && <Banner tone="error">{error}</Banner>}
+
+          {isRandom ? (
+            <div className="rounded-lg border border-zinc-800 p-3 text-xs">
+              <p className="text-zinc-400">
+                When a team reaches Level 02 it gets the least-used word below (so teams get different words until the list runs out), three locations
+                spelling it, two random decoys, and a random riddle order. {random.spellableWords.length} words can be spelled from the ten letters;
+                used words are marked with how many teams got them.
+              </p>
+              <p className="mt-2 flex flex-wrap gap-1.5 font-mono">
+                {random.spellableWords.map((w) => (
+                  <span key={w} className={`rounded px-1.5 py-0.5 ${random.usedWords[w] ? 'bg-amber-900/40 text-amber-200' : 'bg-zinc-800 text-zinc-300'}`}>
+                    {w}{random.usedWords[w] ? ` ×${random.usedWords[w]}` : ''}
+                  </span>
+                ))}
+              </p>
+              <p className="mt-2 text-zinc-500">Edit the candidate list in the task02 configuration (<code>words</code>) below.</p>
+            </div>
+          ) : (
+            <AssignmentForm keyName={DEFAULT_KEY} label="Default (every team without its own)" locations={locations} initial={assignments[DEFAULT_KEY]} removable={false} onSaved={onSaved} />
+          )}
+
           <table className="w-full text-xs">
             <thead className="text-left text-zinc-500">
-              <tr><th className="py-1">Team</th><th>Uses</th><th>Level 02 readiness</th><th /></tr>
+              <tr><th className="py-1">Team</th><th>Uses</th><th>Level 02 readiness</th><th>Given</th><th /></tr>
             </thead>
             <tbody>
               {teams.map((t) => (
                 <React.Fragment key={t.teamId}>
                   <tr className="border-t border-zinc-800">
                     <td className="py-1.5">{t.teamName}</td>
-                    <td>{t.task02.source === 'TEAM' ? 'own assignment' : t.task02.source === 'DEFAULT' ? 'default' : '—'}</td>
+                    <td>{SOURCE_LABEL[t.task02.source]}</td>
                     <td className={t.task02.problem ? 'text-red-300' : 'text-emerald-300'}>{t.task02.problem ?? 'ready'}</td>
+                    <td className="font-mono text-zinc-300">
+                      {t.task02Given ? `${t.task02Given.word} · ${t.task02Given.locationIds.join(' ')}` : <span className="text-zinc-600">not yet</span>}
+                    </td>
                     <td className="text-right">
                       <button type="button" className="text-sky-300 hover:underline" onClick={() => setOpenTeam(openTeam === t.teamId ? null : t.teamId)}>
                         {openTeam === t.teamId ? 'Close' : 'Assign'}
@@ -285,10 +353,10 @@ export const AssignmentsEditor: React.FC<{
                   </tr>
                   {openTeam === t.teamId && (
                     <tr>
-                      <td colSpan={4} className="py-2">
+                      <td colSpan={5} className="py-2">
                         <AssignmentForm
                           keyName={t.teamId}
-                          label={`${t.teamName}${t.currentTaskId && t.currentTaskId !== 'task01' ? ' (already past Level 01: changes apply only if Level 02 has not started)' : ''}`}
+                          label={`${t.teamName}${t.task02Given ? ' (already in Level 02: this changes nothing for it)' : ''}`}
                           locations={locations}
                           initial={assignments[t.teamId] ?? assignments[DEFAULT_KEY]}
                           removable={t.task02.source === 'TEAM'}

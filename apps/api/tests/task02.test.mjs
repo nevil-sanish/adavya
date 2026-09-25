@@ -32,9 +32,12 @@ const reading = (l, extra = {}) => ({ latitude: l.latitude, longitude: l.longitu
 
 describe('Level 02 — campus GPS letters', { skip }, () => {
   let db;
+  // These tests exercise admin-chosen assignments; random assignment has its own suite (random-words.test.mjs).
+  const config = (extra = {}) => setTaskConfig(db, CID, 'task02', { config: { assignmentMode: 'MANUAL', ...extra } });
   before(async () => {
     db = testDb(CID);
     await openCompetition(db, CID);
+    await config();
   });
 
   /* ---------------------------- admin configuration ---------------------------- */
@@ -230,12 +233,12 @@ describe('Level 02 — campus GPS letters', { skip }, () => {
   });
 
   test('configurable: any-order word, auto-completion on three correct, revealed classification', async () => {
-    await setTaskConfig(db, CID, 'task02', { config: { acceptAnyOrder: true } });
+    await config({ acceptAnyOrder: true });
     const anagram = await atTask02(db, 'Anagram');
     for (const id of ['L02', 'L06', 'L08']) await visit(db, anagram, anagram.players[0], byId[id]);
     assert.equal((await submit(db, anagram, anagram.captain, 'task02', 'word', { letters: 'ORE' })).correct, true);
 
-    await setTaskConfig(db, CID, 'task02', { config: { acceptAnyOrder: false, completionMode: 'AUTO_ON_THREE_CORRECT', revealClassificationOnDiscovery: true } });
+    await config({ acceptAnyOrder: false, completionMode: 'AUTO_ON_THREE_CORRECT', revealClassificationOnDiscovery: true });
     const auto = await atTask02(db, 'Auto');
     const decoy = await visit(db, auto, auto.players[0], byId.L10);
     assert.equal(decoy.resultType, 'DECOY');
@@ -249,6 +252,6 @@ describe('Level 02 — campus GPS letters', { skip }, () => {
     assert.equal((await teamDoc(db, auto)).currentTaskId, 'task03', 'third correct letter completes the level');
     assert.ok((await captainView(db, auto, 'task02')).completionRank >= 1);
 
-    await setTaskConfig(db, CID, 'task02', { config: { completionMode: 'CAPTAIN_SUBMITS_WORD', revealClassificationOnDiscovery: false } });
+    await config({ completionMode: 'CAPTAIN_SUBMITS_WORD', revealClassificationOnDiscovery: false });
   });
 });

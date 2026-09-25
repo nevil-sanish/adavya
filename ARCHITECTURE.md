@@ -252,7 +252,13 @@ Each team gets an assignment: five of the ten location ids in the order the capt
 { "locationIds": ["L02", "L05", "L06", "L08", "L10"], "correctLocationIds": ["L02", "L06", "L08"], "word": "ROE" }
 ```
 
-A captain cannot start until the team's assignment (own or default) is valid; the admin page shows per-team readiness. The assignment is frozen into the run when Level 02 starts, so later edits affect only teams that have not reached it. Editing a riddle changes nothing else.
+**How a team gets its assignment** (checked in this order when the team reaches Level 02):
+
+1. **Its own assignment**, if the admin set one for that team in `/admin`.
+2. **Random** (`assignmentMode: RANDOM`, the default). The server picks a word from the `words` list that the ten location letters can spell, choosing the least-used one so teams get different words until the list runs out. It then picks three locations spelling it, two random decoys from the other seven, and a random riddle order. Word usage is recorded in `privateTaskConfig/task02.usedWords` in the same transaction, so simultaneous teams still get different words. A reset clears it.
+3. **`_default`** (`assignmentMode: MANUAL`): every team gets the same assignment.
+
+A captain cannot start until the team's assignment is valid (in random mode: at least one word in the list can be spelled). The admin page shows per-team readiness and, once a team reaches Level 02, the word and locations it was given. The assignment is frozen into the run when Level 02 starts, so later edits affect only teams that have not reached it. Editing a riddle changes nothing else.
 
 Task configuration (`task02` in `/admin`; defaults shown):
 
@@ -266,6 +272,8 @@ Task configuration (`task02` in `/admin`; defaults shown):
 | `completionMode` | `CAPTAIN_SUBMITS_WORD` | Or `AUTO_ON_THREE_CORRECT`: the third correct discovery completes the level |
 | `acceptAnyOrder` | false | Accept the word's letters in any order |
 | `revealClassificationOnDiscovery` | false | Show correct/decoy (and a correct-letter count) after discovery |
+| `assignmentMode` | `RANDOM` | `RANDOM`: random word and five locations per team; `MANUAL`: the `_default` assignment |
+| `words` | ~280 common three-letter words | Candidates for random words; only words the ten letters can spell are used |
 
 ### Data
 

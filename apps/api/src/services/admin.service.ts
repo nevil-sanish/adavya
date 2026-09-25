@@ -6,6 +6,7 @@ import { refs } from '../game/refs.js';
 import { DEFAULT_SCORING_POLICY } from '../game/scoring.js';
 import { taskModule, TASKS } from '../game/tasks/index.js';
 import { computeLeaderboards } from './leaderboard.service.js';
+import { formableWords } from '../game/words.js';
 import { assignmentProblem, assignmentSchema, DEFAULT_ASSIGNMENT, locationPoolSchema, type Assignment, type LocationConfig } from '../game/tasks/task02.js';
 import { TASK_ORDER, type CompetitionDoc, type MemberDoc, type TeamDoc } from '../game/types.js';
 
@@ -96,9 +97,14 @@ export async function deleteAssignment(db: Firestore, cid: string, key: string):
 function assignmentStatus(
   teamId: string,
   assignments: Map<string, Assignment>,
-  pool: LocationConfig[] | null
-): { source: 'TEAM' | 'DEFAULT' | 'NONE'; problem: string | null } {
+  pool: LocationConfig[] | null,
+  task02: { assignmentMode: 'RANDOM' | 'MANUAL'; words: string[] }
+): { source: 'TEAM' | 'RANDOM' | 'DEFAULT' | 'NONE'; problem: string | null } {
   const own = assignments.get(teamId);
+  if (!own && task02.assignmentMode === 'RANDOM') {
+    if (!pool) return { source: 'RANDOM', problem: 'Locations are not configured' };
+    return { source: 'RANDOM', problem: formableWords(task02.words, pool).length ? null : 'No word in the word list can be spelled from the location letters' };
+  }
   const assignment = own ?? assignments.get(DEFAULT_ASSIGNMENT);
   const source = own ? 'TEAM' : assignment ? 'DEFAULT' : 'NONE';
   if (!pool) return { source, problem: 'Locations are not configured' };
@@ -126,6 +132,12 @@ export async function getOverview(db: Firestore, cid: string) {
     Promise.all(TASK_ORDER.map((t) => r.privateConfig(cid, t).get())),
   ]);
   const comp = compSnap.data() as CompetitionDoc | undefined;
+  const task02Index = TASK_ORDER.indexOf('task02');
+  const task02Config = {
+    ...(TASKS.task02.defaultConfig as { assignmentMode: 'RANDOM' | 'MANUAL'; words: string[] }),
+    ...((configSnaps[task02Index].data()?.config as object) ?? {}),
+  };
+  const usedWords = (configSnaps[task02Index].data()?.usedWords as Record<string, number> | undefined) ?? {};
   const locations = locationsSnap.docs.map((d) => d.data() as LocationConfig).sort((a, b) => a.locationId.localeCompare(b.locationId));
   const pool = locationPoolSchema.safeParse(locations);
   const assignments = new Map(
@@ -147,7 +159,19 @@ export async function getOverview(db: Firestore, cid: string) {
         currentTaskId: team.currentTaskId,
         memberCount: team.memberCount,
         totalScore: (summarySnap.data()?.totalScore as number | undefined) ?? 0,
-        task02: assignmentStatus(d.id, assignments, pool.success ? pool.data : null),
+        task02: assignmentStatus(d.id, assignments, pool.success ? pool.data : null, task02Config),
+        // What the team was actually given, once it reached Level 02.
+        task02Given: await (async () => {
+          const given = (await r.teamPrivate(cid, d.id, 'task02').get()).data();
+          return given
+            ? {
+                word: given.word as string,
+                locationIds: (given.assigned as Array<{ locationId: string; classification: string }>).map(
+                  (l) => `${l.locationId}${l.classification === 'CORRECT' ? '✓' : ''}`
+                ),
+              }
+            : null;
+        })(),
         members: membersSnap.docs.map((m) => {
           const member = m.data() as MemberDoc;
           return { uid: member.uid, displayName: member.displayName, slot: member.slot, lastSeenAtMs: member.lastSeenAt?.toMillis?.() ?? null };
@@ -172,6 +196,11 @@ export async function getOverview(db: Firestore, cid: string) {
     locations,
     locationsProblem: pool.success ? null : pool.error.errors[0]?.message ?? 'Invalid locations',
     assignments: Object.fromEntries(assignments),
+    task02Random: {
+      mode: task02Config.assignmentMode,
+      spellableWords: pool.success ? formableWords(task02Config.words, pool.data) : [],
+      usedWords,
+    },
     taskConfigs: Object.fromEntries(
       TASK_ORDER.map((taskId, i) => [taskId, { ...TASKS[taskId].defaultConfig, ...((configSnaps[i].data()?.config as object) ?? {}) }])
     ),
@@ -188,6 +217,8 @@ export async function getOverview(db: Firestore, cid: string) {
 export async function resetCompetition(db: Firestore, cid: string, keepTeams: boolean): Promise<{ teams: number }> {
   const r = refs(db);
   for (const taskId of TASK_ORDER) await db.recursiveDelete(r.taskResult(cid, taskId));
+  // Random Level 02 words start fresh.
+  await r.privateConfig(cid, 'task02').set({ usedWords: FieldValue.delete() }, { merge: true });
   const teamsSnap = await r.teams(cid).get();
 
   for (const teamDoc of teamsSnap.docs) {
