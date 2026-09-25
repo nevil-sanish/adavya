@@ -213,6 +213,15 @@ A tie group is anchored at its first completion: a later completion joins the la
 
 The completion timestamp is created by the trusted backend. Client timestamps are analytics only.
 
+## 7b. Final leaderboards
+
+Two leaderboards are computed by the API from team documents and captain summaries (`apps/api/src/services/leaderboard.service.ts`):
+
+- **Points:** total ranking points over the six tasks, highest first. Equal points are ranked by earlier finish.
+- **First to finish:** teams that completed task06, ordered by the server time of that completion, with total time from the captain starting task01. Unfinished teams follow without a rank, ordered by tasks completed.
+
+The product owner chose to show both at the end of the game. A team sees them (captain and players) only once it has completed all six tasks, and admins see them live in `/admin`. Before that, `GET /api/leaderboard` answers `403 LEADERBOARD_LOCKED`. The boards are served by the API, so the Firestore rules still keep every team's raw data private.
+
 ## 8. Task 1 — Orientation
 
 Private configuration contains the expected sequence and player association. Each phone detects left/right and submits a direction event. The server accepts only the authenticated player's expected direction at the current sequence position.
@@ -402,6 +411,7 @@ Firestore rules should enforce coarse authorization. Trusted functions enforce g
 | submitTask06Morse | `POST /api/tasks/task06/morse` | player |
 | completeTaskAndRank | inside every submission transaction | — |
 | setPresence | direct Firestore write to own member doc (rules-restricted) | member |
+| final leaderboards | `GET /api/leaderboard` | a member of a team that has completed all six tasks; admins always |
 | admin | `GET /api/admin/overview`, `PUT /api/admin/competition`, `/locations`, `/tasks/{taskId}/config` | `ADMIN_EMAILS` |
 
 All routes authenticate the caller, derive identity from the auth token, verify team membership, verify task state, and use idempotency keys where retries are possible. Game transactions retry up to 20 times under contention; a request that still loses returns `503 BUSY`, which clients retry with the same idempotency key.

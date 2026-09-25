@@ -124,3 +124,21 @@ test('press timing and letter lookup', () => {
   assert.equal(letterForMorse('......'), null);
   assert.equal(Object.keys(MORSE).length, 26);
 });
+
+test('with no hold, each new level is reported as soon as it is reached, rate-limited', () => {
+  const p = createPlateauDetector({ bandDb: 2.5, holdMs: 0, floorDb: 45, minIntervalMs: 150 });
+  assert.equal(p.update(40, 0), null, 'below room noise');
+  assert.equal(p.update(55, 100)?.levelDb, 55, 'first level above the floor reports at once');
+  assert.equal(p.update(56, 120), null, 'same level band: no repeat');
+  assert.equal(p.update(62, 180), null, 'new level too soon after the last report');
+  assert.equal(p.update(62, 260)?.levelDb, 62, 'reported once the interval has passed');
+  // A quick rising voice passes through every level on the way up.
+  const seen: number[] = [];
+  const q = createPlateauDetector({ bandDb: 2.5, holdMs: 0, floorDb: 45, minIntervalMs: 150 });
+  for (let t = 0, db = 50; db <= 80; t += 50, db += 1) {
+    const hit = q.update(db, t);
+    if (hit) seen.push(hit.levelDb);
+  }
+  assert.ok(seen.length >= 5, seen.join(','));
+  for (let i = 1; i < seen.length; i++) assert.ok(seen[i] - seen[i - 1] <= 6, `gap ${seen[i - 1]}→${seen[i]}`);
+});

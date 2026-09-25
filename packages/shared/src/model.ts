@@ -249,3 +249,35 @@ export function isMemberOnline(member: Member, now = Date.now()): boolean {
   const seen = member.lastSeenAt?.toMillis() ?? 0;
   return member.isConnected && now - seen <= PRESENCE_STALE_MS;
 }
+
+/** One team's line on the final leaderboards (GET /api/leaderboard). */
+export interface TeamStanding {
+  teamId: string;
+  teamName: string;
+  totalScore: number;
+  tasksCompleted: number;
+  currentTaskId: TaskId | null;
+  finished: boolean;
+  completedAtMs: number | null;
+  durationMs: number | null;
+}
+
+export interface Leaderboards {
+  /** Highest points first; equal points broken by earlier finish. */
+  points: Array<TeamStanding & { rank: number }>;
+  /** Finishers by completion time, then unfinished teams (rank null). */
+  finishOrder: Array<TeamStanding & { rank: number | null }>;
+  generatedAtMs: number;
+  yourTeamId: string | null;
+}
+
+/** 1:23:45 or 12:34 */
+export function formatDuration(ms: number | null): string {
+  if (ms === null || ms < 0) return '—';
+  const total = Math.round(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = total % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return h ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+}

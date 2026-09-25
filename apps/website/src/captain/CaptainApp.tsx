@@ -68,7 +68,7 @@ export const CaptainApp: React.FC<TeamProps> = ({ cid, teamId, uid }) => {
         {t.status === 'IN_PROGRESS' && t.currentTaskId && (
           <Monitor key={t.currentTaskId} cid={cid} teamId={teamId} uid={uid} taskId={t.currentTaskId} members={members.data} summary={summary.data} />
         )}
-        {t.status === 'COMPLETED' && <Finished summary={summary.data} />}
+        {t.status === 'COMPLETED' && <Finished summary={summary.data} teamId={teamId} />}
       </main>
     </div>
   );

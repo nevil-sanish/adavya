@@ -108,7 +108,7 @@ Before changing code:
 - The target word in Task 6.
 - Other players' targets, assignments, or progress.
 - Round 2's full location mapping or correct/decoy classification.
-- Scores or rankings unless explicitly provided by the product owner.
+- Scores or rankings unless explicitly provided by the product owner. (Provided: both final leaderboards, once the team has completed all six tasks — ARCHITECTURE.md §7b.)
 
 ## 6. Required implementation behavior
 

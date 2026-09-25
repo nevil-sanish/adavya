@@ -9,10 +9,12 @@ const CALIBRATION_MS = 3000;
 /** A hold must be this much louder than the calibrated room noise. */
 const AMBIENT_MARGIN_DB = 6;
 const DISPLAY_EVERY_MS = 120;
+/** With no hold required, report new levels at most this often. */
+const MIN_REPORT_INTERVAL_MS = 150;
 
 /**
- * Live approximate loudness. A steady hold (within a narrow band, for the task's
- * hold time, above room noise) is sent as one hit event. The phone never knows
+ * Live approximate loudness. Each new level above room noise (held for the
+ * task's hold time, if one is configured) is sent as a hit event. The phone never knows
  * its target; the server checks the level, the player and the required order.
  */
 export const Task04Sound: React.FC<TaskProps> = ({ view, send, paused, online }) => {
@@ -26,7 +28,8 @@ export const Task04Sound: React.FC<TaskProps> = ({ view, send, paused, online })
   blockedRef.current = paused || !online;
   const sendRef = useRef(send);
   sendRef.current = send;
-  const holdMs = (view.holdMs ?? 1500) + 100;
+  // A small margin over the server's hold requirement; 0 means a target counts the moment it is reached.
+  const holdMs = view.holdMs ? view.holdMs + 100 : 0;
 
   const start = async () => {
     setError(null);
@@ -87,7 +90,7 @@ export const Task04Sound: React.FC<TaskProps> = ({ view, send, paused, online })
       return () => cancelAnimationFrame(frame);
     }
 
-    const detector = createPlateauDetector({ bandDb: 2.5, holdMs, floorDb: floor ?? 0 });
+    const detector = createPlateauDetector({ bandDb: 2.5, holdMs, floorDb: floor ?? 0, minIntervalMs: MIN_REPORT_INTERVAL_MS });
     const loop = () => {
       const t = performance.now();
       const db = read();
@@ -129,8 +132,9 @@ export const Task04Sound: React.FC<TaskProps> = ({ view, send, paused, online })
           <p className="muted">Approximate level</p>
           <p className="big-number" aria-live="off">{Math.round(level)}<span className="muted"> dB</span></p>
           <div className="meter" aria-hidden="true"><span style={{ width: `${Math.min(100, Math.max(0, ((level - 30) / 70) * 100))}%` }} /></div>
-          <p className="muted">Room noise ≈ {floor !== null ? floor - AMBIENT_MARGIN_DB : '…'} dB. Hold a steady sound for {(holdMs / 1000).toFixed(1)} s.</p>
-          {lastHold !== null && <Banner tone="info">Steady hold at ~{lastHold} dB sent.</Banner>}
+          <p className="muted">Room noise ≈ {floor !== null ? floor - AMBIENT_MARGIN_DB : '…'} dB.{' '}
+            {holdMs ? `Hold a steady sound for ${(holdMs / 1000).toFixed(1)} s.` : 'Make a sound at the loudness your captain calls out.'}</p>
+          {lastHold !== null && <Banner tone="info">~{lastHold} dB sent.</Banner>}
           {error && <Banner tone="error">{error}</Banner>}
           <button type="button" className="btn secondary" onClick={() => setStage('calibrating')}>Recalibrate</button>
         </>

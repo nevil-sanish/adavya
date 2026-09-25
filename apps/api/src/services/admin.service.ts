@@ -5,6 +5,7 @@ import { runGameTransaction } from '../lib/transaction.js';
 import { refs } from '../game/refs.js';
 import { DEFAULT_SCORING_POLICY } from '../game/scoring.js';
 import { taskModule, TASKS } from '../game/tasks/index.js';
+import { computeLeaderboards } from './leaderboard.service.js';
 import { assignmentProblem, assignmentSchema, DEFAULT_ASSIGNMENT, locationPoolSchema, type Assignment, type LocationConfig } from '../game/tasks/task02.js';
 import { TASK_ORDER, type CompetitionDoc, type MemberDoc, type TeamDoc } from '../game/types.js';
 
@@ -166,6 +167,7 @@ export async function getOverview(db: Firestore, cid: string) {
 
   return {
     competitionId: cid,
+    leaderboards: await computeLeaderboards(db, cid),
     competition: comp ? { name: comp.name, status: comp.status, scoringPolicy: comp.scoringPolicy, taskOrder: comp.taskOrder } : null,
     locations,
     locationsProblem: pool.success ? null : pool.error.errors[0]?.message ?? 'Invalid locations',

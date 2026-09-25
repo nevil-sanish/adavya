@@ -28,7 +28,7 @@ export const Task04Panel: React.FC<PanelProps<Task04CaptainView>> = ({ view }) =
         })}
       </ol>
       <p className="mt-3 text-xs text-zinc-500">
-        A target counts when its owner holds within ±{view.toleranceDb} dB for {(view.holdMs / 1000).toFixed(1)} s. Phone readings are
+        A target counts when its owner {view.holdMs ? `holds within ±${view.toleranceDb} dB for ${(view.holdMs / 1000).toFixed(1)} s` : `reaches within ±${view.toleranceDb} dB`}. Phone readings are
         approximate.
       </p>
     </Card>

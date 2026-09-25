@@ -1,5 +1,6 @@
 // Shared setup for tests that run against the Firestore emulator (`npm run test:emulator`).
 import { randomUUID } from 'node:crypto';
+import { Timestamp } from 'firebase-admin/firestore';
 import fs from 'node:fs';
 import { admin, getDb } from '../dist/config/firebase.js';
 import { refs } from '../dist/game/refs.js';
@@ -55,6 +56,7 @@ export async function newTeam(db, name = 'Team') {
 const seqs = new Map();
 /** Submits a task event like a client would: current runId, fresh event id, increasing sequence. */
 export async function submit(db, team, uid, taskId, action, payload = {}, overrides = {}) {
+  if (team.captain) await heartbeat(db, team);
   const run = (await refs(db).run(team.cid, team.teamId, taskId).get()).data();
   const seq = (seqs.get(uid) ?? 0) + 1;
   seqs.set(uid, seq);
@@ -79,8 +81,21 @@ export async function teamDoc(db, team) {
   return (await refs(db).team(team.cid, team.teamId).get()).data();
 }
 
+const lastBeat = new Map();
+/**
+ * The captain's open page sends a presence heartbeat every 10 s. Tests do the same
+ * (at most every 10 s per team) so a slow run never looks like a disconnected captain.
+ */
+export async function heartbeat(db, team, force = false) {
+  const now = Date.now();
+  if (!force && now - (lastBeat.get(team.teamId) ?? 0) < 10_000) return;
+  lastBeat.set(team.teamId, now);
+  await refs(db).member(team.cid, team.teamId, team.captain).update({ isConnected: true, lastSeenAt: Timestamp.now() });
+}
+
 /** Solves the team's current task using the hidden state (as only the server could). */
 export async function solveTask(db, team, taskId) {
+  await heartbeat(db, team);
   const p = await privateState(db, team, taskId);
   switch (taskId) {
     case 'task01':

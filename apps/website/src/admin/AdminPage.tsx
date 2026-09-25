@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
-import { ApiError, SLOT_LABEL, TASK_META, TASK_ORDER, type Slot, type TaskId } from '@adavya/shared';
+import { ApiError, formatDuration, SLOT_LABEL, TASK_META, TASK_ORDER, type Leaderboards, type Slot, type TaskId } from '@adavya/shared';
 import { useAuth } from '../context/AuthContext.js';
 import { api } from '../services/api.js';
 import { Banner, Button, Card, FullScreenMessage } from '../components/ui.js';
@@ -9,6 +9,7 @@ import { AssignmentsEditor, LocationsEditor, type AssignmentConfig, type Locatio
 
 interface Overview {
   competitionId: string;
+  leaderboards: Omit<Leaderboards, 'yourTeamId'>;
   competition: { name: string; status: 'DRAFT' | 'ACTIVE' | 'CLOSED'; scoringPolicy: unknown; taskOrder: TaskId[] } | null;
   locations: LocationRow[];
   locationsProblem: string | null;
@@ -72,6 +73,7 @@ export const AdminPage: React.FC = () => {
       {data?.competition && (
         <>
           <StatusCard status={data.competition.status} onChange={load} />
+          <LeaderboardsCard boards={data.leaderboards} />
           <TeamsCard teams={data.teams} />
           <ResultsCard results={data.results} />
           <LocationsEditor locations={data.locations} problem={data.locationsProblem} onSaved={load} />
@@ -128,6 +130,35 @@ const StatusCard: React.FC<{ status: string; onChange: () => void }> = ({ status
     </Card>
   );
 };
+
+const LeaderboardsCard: React.FC<{ boards: Overview['leaderboards'] }> = ({ boards }) => (
+  <Card title="Final leaderboards" aside="teams see these once they finish">
+    <div className="grid gap-6 md:grid-cols-2">
+      <div>
+        <h3 className="mb-1 text-xs font-semibold text-zinc-400">By points</h3>
+        <ol className="space-y-0.5 text-sm">
+          {boards.points.map((s) => (
+            <li key={s.teamId} className="flex justify-between gap-2">
+              <span>#{s.rank} {s.teamName}</span>
+              <span className="text-zinc-400">{s.totalScore} pts · {s.tasksCompleted}/6</span>
+            </li>
+          ))}
+        </ol>
+      </div>
+      <div>
+        <h3 className="mb-1 text-xs font-semibold text-zinc-400">First to finish</h3>
+        <ol className="space-y-0.5 text-sm">
+          {boards.finishOrder.map((s) => (
+            <li key={s.teamId} className="flex justify-between gap-2">
+              <span>{s.rank ? `#${s.rank}` : '—'} {s.teamName}</span>
+              <span className="text-zinc-400">{s.finished ? formatDuration(s.durationMs) : `on ${s.currentTaskId ?? '—'}`}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </div>
+  </Card>
+);
 
 const TeamsCard: React.FC<{ teams: Overview['teams'] }> = ({ teams }) => (
   <Card title="Teams" aside={`${teams.length}`}>

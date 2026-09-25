@@ -6,6 +6,7 @@ import { authRouter } from './routes/auth.routes.js';
 import { teamRouter } from './routes/team.routes.js';
 import { taskRouter } from './routes/task.routes.js';
 import { adminRouter } from './routes/admin.routes.js';
+import { leaderboardRouter } from './routes/leaderboard.routes.js';
 
 // Load environment variables from the repository's single .env
 loadEnv();
@@ -51,6 +52,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/teams', teamRouter);
 app.use('/api/tasks', taskRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/leaderboard', leaderboardRouter);
 
 // 404 handler
 app.use((req: Request, res: Response) => {

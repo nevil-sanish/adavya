@@ -7,6 +7,7 @@ import { paths } from '../services/paths.js';
 import { sendEvent } from '../services/api.js';
 import { Banner, Loading } from '../ui.js';
 import { NameField } from './NameField.js';
+import { FinalLeaderboards } from './FinalLeaderboards.js';
 import { Task01Orientation } from '../tasks/Task01Orientation.js';
 import { Task02Gps } from '../tasks/Task02Gps.js';
 import { Task03Pose } from '../tasks/Task03Pose.js';
@@ -74,10 +75,13 @@ export const PlayerApp: React.FC<TeamProps> = ({ cid, teamId, uid }) => {
         <CurrentTask key={t.currentTaskId} cid={cid} teamId={teamId} uid={uid} taskId={t.currentTaskId} paused={!captainOnline} online={online} />
       )}
       {t.status === 'COMPLETED' && (
-        <div className="card center">
-          <h1>All tasks complete</h1>
-          <p className="muted">Great work. Your captain has the results.</p>
-        </div>
+        <>
+          <div className="card center">
+            <h1>All tasks complete</h1>
+            <p className="muted">Great work! Here is how everyone did.</p>
+          </div>
+          <FinalLeaderboards teamId={teamId} />
+        </>
       )}
     </main>
   );

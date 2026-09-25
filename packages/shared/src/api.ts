@@ -1,4 +1,4 @@
-import type { Session, TaskId } from './model.ts';
+import type { Leaderboards, Session, TaskId } from './model.ts';
 
 export class ApiError extends Error {
   code: string;
@@ -65,6 +65,8 @@ export function createApi(baseUrl: string, getToken: () => Promise<string | null
       request<{ teamId: string; teamCode: string; competitionId: string }>('/teams/create', { method: 'POST', body: { teamName } }),
     joinTeam: (code: string) => request<{ teamId: string; slot: string; competitionId: string }>('/teams/join', { method: 'POST', body: { code } }),
     startCompetition: () => request<{ started: boolean }>('/teams/start', { method: 'POST' }),
+    /** Opens once the caller's team has completed all six tasks (403 LEADERBOARD_LOCKED before). */
+    leaderboard: () => request<Leaderboards>('/leaderboard'),
     submit: <T = Record<string, unknown>>(taskId: TaskId, action: string, envelope: EventEnvelope) =>
       request<T & { duplicate: boolean }>(`/tasks/${taskId}/${action}`, { method: 'POST', body: envelope }),
     admin: {

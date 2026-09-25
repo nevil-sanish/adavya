@@ -5,7 +5,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { refs } from '../dist/game/refs.js';
 import { startFirstTask, submitAction } from '../dist/game/engine.js';
 import { MORSE } from '../dist/game/morse.js';
-import { captainView, newTeam, openCompetition, privateState, skip, solveTask, submit, teamDoc, testDb } from './helpers.mjs';
+import { captainView, heartbeat, newTeam, openCompetition, privateState, skip, solveTask, submit, teamDoc, testDb } from './helpers.mjs';
 
 const CID = 'task-tests';
 const TASKS = ['task01', 'task02', 'task03', 'task04', 'task05', 'task06'];
@@ -141,6 +141,8 @@ describe('task engine', { skip }, () => {
   test('captain disconnect pauses player submissions until the captain reconnects', async () => {
     const team = await startedTeam(db, 'Pause');
     const captainRef = refs(db).member(CID, team.teamId, team.captain);
+    // Record a heartbeat now so the helpers' automatic heartbeat does not undo the disconnect below.
+    await heartbeat(db, team, true);
     await captainRef.update({ lastSeenAt: Timestamp.fromMillis(Date.now() - 10 * 60_000) });
     await rejects(submit(db, team, team.players[0], 'task01', 'orient', { direction: 'LEFT' }), 'TEAM_PAUSED');
     await captainRef.update({ lastSeenAt: Timestamp.now(), isConnected: true });
@@ -194,10 +196,10 @@ describe('task engine', { skip }, () => {
     assert.deepEqual(view0.targets, p.order.map((o) => o.targetDb));
     assert.equal(JSON.stringify(view0).includes(first.uid), false, 'captain view has no mapping');
 
-    const hit = (uid, levelDb, extra = {}) => submit(db, team, uid, 'task04', 'hit', { levelDb, holdMs: 1600, ageMs: 100, ...extra });
+    // No hold: a target counts the moment its owner reaches it (default holdMs 0).
+    const hit = (uid, levelDb, extra = {}) => submit(db, team, uid, 'task04', 'hit', { levelDb, holdMs: 0, ageMs: 100, ...extra });
     await hit(second.uid, second.targetDb); // out of order
     await hit(first.uid, first.targetDb + 10); // outside tolerance
-    await hit(first.uid, first.targetDb, { holdMs: 500 }); // too short
     await hit(first.uid, first.targetDb, { ageMs: 60_000 }); // late
     assert.equal((await captainView(db, team, 'task04')).completedCount, 0);
     assert.equal((await captainView(db, team, 'task04')).log.length, 0, 'no rejection feedback by default');

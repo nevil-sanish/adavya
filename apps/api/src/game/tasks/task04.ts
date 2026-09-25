@@ -8,6 +8,7 @@ interface Task04Config {
   maxDb: number;
   minSeparationDb: number;
   toleranceDb: number;
+  /** 0: a target counts the moment it is reached. Above 0: the level must be held this long. */
   holdMs: number;
   /** Hits whose hold ended longer ago than this (device-relative) are late and ignored. */
   maxEventAgeMs: number;
@@ -22,9 +23,9 @@ interface OrderEntry {
 
 /**
  * Sound relay. Three separated targets are mapped to players in a hidden
- * required order. The captain sees the ordered values only. Phones report
- * stable held levels; the server accepts a hit only from the player whose target
- * is next, within tolerance.
+ * required order. The captain sees the ordered values only. Phones report the
+ * levels they reach (held for `holdMs`, 0 by default); the server accepts a hit
+ * only from the player whose target is next, within tolerance.
  */
 export const task04: TaskModule<Task04Config> = {
   taskId: 'task04',
@@ -36,7 +37,7 @@ export const task04: TaskModule<Task04Config> = {
     maxDb: 85,
     minSeparationDb: 8,
     toleranceDb: 3,
-    holdMs: 1500,
+    holdMs: 0,
     maxEventAgeMs: 4000,
     revealIncorrect: false,
   },
@@ -46,7 +47,7 @@ export const task04: TaskModule<Task04Config> = {
       maxDb: z.number().int().min(20).max(120),
       minSeparationDb: z.number().int().min(1).max(40),
       toleranceDb: z.number().min(0.5).max(20),
-      holdMs: z.number().int().min(300).max(10_000),
+      holdMs: z.number().int().min(0).max(10_000),
       maxEventAgeMs: z.number().int().min(500).max(60_000),
       revealIncorrect: z.boolean(),
     })

@@ -21,18 +21,22 @@ export interface Plateau {
 }
 
 /**
- * Detects a steady held sound: readings stay within `bandDb` of their running
- * mean for `holdMs`, above `floorDb` (ambient noise plus a margin). Each steady
- * hold reports once; the level must leave the band before the next report.
+ * Detects a sound level: readings stay within `bandDb` of their running mean
+ * for `holdMs`, above `floorDb` (ambient noise plus a margin). Each level reports
+ * once; the sound must leave the band before the next report. With `holdMs: 0`
+ * every new level is reported as soon as it is reached (a "hit"), at most once
+ * per `minIntervalMs`.
  */
-export function createPlateauDetector(opts: { bandDb?: number; holdMs?: number; floorDb?: number } = {}) {
+export function createPlateauDetector(opts: { bandDb?: number; holdMs?: number; floorDb?: number; minIntervalMs?: number } = {}) {
   const bandDb = opts.bandDb ?? 2.5;
   const holdMs = opts.holdMs ?? 1500;
+  const minIntervalMs = opts.minIntervalMs ?? 0;
   let floorDb = opts.floorDb ?? 0;
   let since = -1;
   let sum = 0;
   let count = 0;
   let reported = false;
+  let lastReportAt = -Infinity;
 
   const reset = () => {
     since = -1;
@@ -54,8 +58,9 @@ export function createPlateauDetector(opts: { bandDb?: number; holdMs?: number; 
       if (since < 0) since = t;
       sum += db;
       count += 1;
-      if (!reported && t - since >= holdMs) {
+      if (!reported && t - since >= holdMs && t - lastReportAt >= minIntervalMs) {
         reported = true;
+        lastReportAt = t;
         return { levelDb: Math.round((sum / count) * 10) / 10, holdMs: Math.round(t - since), endedAt: t };
       }
       return null;
