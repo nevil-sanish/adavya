@@ -136,6 +136,8 @@ export interface Task02CaptainView extends CaptainViewBase {
   attemptCount: number;
   completionMode: 'CAPTAIN_SUBMITS_WORD' | 'AUTO_ON_THREE_CORRECT';
   acceptAnyOrder: boolean;
+  /** The word counts only after the three correct locations were found (absent in older runs: false). */
+  requireDiscoveries?: boolean;
   revealClassification: boolean;
   /** Correct letters found; null unless the admin reveals classification after discovery. */
   correctFound: number | null;

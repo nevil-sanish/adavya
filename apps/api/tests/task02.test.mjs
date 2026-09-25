@@ -33,7 +33,7 @@ const reading = (l, extra = {}) => ({ latitude: l.latitude, longitude: l.longitu
 describe('Level 02 — campus GPS letters', { skip }, () => {
   let db;
   // These tests exercise admin-chosen assignments; random assignment has its own suite (random-words.test.mjs).
-  const config = (extra = {}) => setTaskConfig(db, CID, 'task02', { config: { assignmentMode: 'MANUAL', ...extra } });
+  const config = (extra = {}) => setTaskConfig(db, CID, 'task02', { config: { assignmentMode: 'MANUAL', requireDiscoveries: true, ...extra } });
   before(async () => {
     db = testDb(CID);
     await openCompetition(db, CID);
@@ -230,6 +230,17 @@ describe('Level 02 — campus GPS letters', { skip }, () => {
     await rejects(submit(db, team, team.players[0], 'task02', 'gps', reading(byId.L05)), 'TASK_NOT_CURRENT');
     const attempts = await refs(db).run(CID, team.teamId, 'task02').collection('wordAttempts').get();
     assert.equal(attempts.size, 4);
+  });
+
+  test('with requireDiscoveries off, the right word counts even if nobody visited a location', async () => {
+    await config({ requireDiscoveries: false });
+    const team = await atTask02(db, 'Word Only');
+    assert.equal((await captainView(db, team, 'task02')).requireDiscoveries, false);
+    assert.equal((await submit(db, team, team.captain, 'task02', 'word', { letters: 'ORE' })).correct, false, 'order still matters');
+    assert.equal((await submit(db, team, team.captain, 'task02', 'word', { letters: 'ROE' })).correct, true);
+    assert.equal((await captainView(db, team, 'task02')).discoveredCount, 0);
+    assert.equal((await teamDoc(db, team)).currentTaskId, 'task03');
+    await config();
   });
 
   test('configurable: any-order word, auto-completion on three correct, revealed classification', async () => {

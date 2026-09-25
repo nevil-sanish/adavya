@@ -104,8 +104,10 @@ export const Task02Panel: React.FC<PanelProps<Task02CaptainView>> = ({ cid, team
                 Submit
               </Button>
               <p className="basis-full text-xs text-zinc-500">
-                Three of the letters form a meaningful word{view.acceptAnyOrder ? ' (any order is accepted).' : '.'} The word counts only after all
-                three of its letters have been found.
+                Three of the letters form a meaningful word{view.acceptAnyOrder ? ' (any order is accepted).' : '.'}
+                {view.requireDiscoveries
+                  ? ' The word counts only after all three of its letters have been found.'
+                  : ' You can submit it as soon as you know it.'}
               </p>
             </form>
             {result && <div className="mt-3"><Banner tone={result.tone}>{result.text}</Banner></div>}

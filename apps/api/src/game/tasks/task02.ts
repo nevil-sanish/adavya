@@ -83,6 +83,11 @@ interface Task02Config {
   completionMode: 'CAPTAIN_SUBMITS_WORD' | 'AUTO_ON_THREE_CORRECT';
   /** Accept the word's letters in any order. */
   acceptAnyOrder: boolean;
+  /**
+   * When true, the captain's word counts only after the team has discovered all three
+   * correct locations. When false (default), a matching word is accepted on its own.
+   */
+  requireDiscoveries: boolean;
   /** Show correct/decoy to players and captain once a location is discovered. */
   revealClassificationOnDiscovery: boolean;
   /** Show players the approximate distance to the nearest assigned location when close. */
@@ -132,6 +137,7 @@ export const task02: TaskModule<Task02Config> = {
     confirmWindowMs: 60_000,
     completionMode: 'CAPTAIN_SUBMITS_WORD',
     acceptAnyOrder: false,
+    requireDiscoveries: false,
     revealClassificationOnDiscovery: false,
     showDistance: true,
     assignmentMode: 'RANDOM',
@@ -146,6 +152,7 @@ export const task02: TaskModule<Task02Config> = {
     confirmWindowMs: z.number().int().min(1_000).max(600_000),
     completionMode: z.enum(['CAPTAIN_SUBMITS_WORD', 'AUTO_ON_THREE_CORRECT']),
     acceptAnyOrder: z.boolean(),
+    requireDiscoveries: z.boolean(),
     revealClassificationOnDiscovery: z.boolean(),
     showDistance: z.boolean(),
     assignmentMode: z.enum(['RANDOM', 'MANUAL']),
@@ -211,6 +218,7 @@ export const task02: TaskModule<Task02Config> = {
         attemptCount: 0,
         completionMode: config.completionMode,
         acceptAnyOrder: config.acceptAnyOrder,
+        requireDiscoveries: config.requireDiscoveries,
         revealClassification: config.revealClassificationOnDiscovery,
         // Only maintained when classification is revealed; otherwise it would leak which hints are correct.
         correctFound: config.revealClassificationOnDiscovery ? 0 : null,
@@ -255,14 +263,17 @@ export const task02: TaskModule<Task02Config> = {
         if (ctx.config.completionMode !== 'CAPTAIN_SUBMITS_WORD') {
           return { response: { correct: false, reason: 'NOT_REQUIRED' }, mutating: false };
         }
-        // The word counts only once its three correct letters were legitimately discovered.
-        // A guess without them is rejected exactly like a wrong word, so it reveals nothing.
-        const correctIds = (ctx.privateState.assigned as AssignedLocation[]).filter((l) => l.classification === 'CORRECT').map((l) => l.locationId);
-        const discoveries = ctx.r.run(ctx.cid, ctx.teamId, 'task02').collection('discoveries');
-        const snaps = await ctx.tx.getAll(...correctIds.map((id) => discoveries.doc(id)));
         const word = ctx.privateState.word as string;
         const matches = ctx.config.acceptAnyOrder ? sortedLetters(input.letters) === sortedLetters(word) : input.letters === word;
-        const correct = matches && snaps.every((s) => s.exists);
+        // With requireDiscoveries, the word counts only once its three correct letters were
+        // legitimately discovered; a guess without them is rejected exactly like a wrong word.
+        let discovered = true;
+        if (ctx.config.requireDiscoveries) {
+          const correctIds = (ctx.privateState.assigned as AssignedLocation[]).filter((l) => l.classification === 'CORRECT').map((l) => l.locationId);
+          const discoveries = ctx.r.run(ctx.cid, ctx.teamId, 'task02').collection('discoveries');
+          discovered = (await ctx.tx.getAll(...correctIds.map((id) => discoveries.doc(id)))).every((s) => s.exists);
+        }
+        const correct = matches && discovered;
         return {
           response: { correct },
           mutating: true,

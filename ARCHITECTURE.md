@@ -271,6 +271,7 @@ Task configuration (`task02` in `/admin`; defaults shown):
 | `nearbyRadiusMultiplier` / `showDistance` | 3 / true | Within 3× a radius the player sees "move closer, about N m" |
 | `completionMode` | `CAPTAIN_SUBMITS_WORD` | Or `AUTO_ON_THREE_CORRECT`: the third correct discovery completes the level |
 | `acceptAnyOrder` | false | Accept the word's letters in any order |
+| `requireDiscoveries` | false | Accept the word only after the three correct locations were discovered |
 | `revealClassificationOnDiscovery` | false | Show correct/decoy (and a correct-letter count) after discovery |
 | `assignmentMode` | `RANDOM` | `RANDOM`: random word and five locations per team; `MANUAL`: the `_default` assignment |
 | `words` | ~280 common three-letter words | Candidates for random words; only words the ten letters can spell are used |
@@ -300,7 +301,7 @@ A player's phone sends `{ latitude, longitude, accuracy, positionTimestamp, queu
 
 Offline, the phone keeps good readings in a persisted queue ("waiting to synchronize") and sends them on reconnect with `queued: true`. The server validates them like live readings, within the offline age limit.
 
-The captain sees the five riddles, each letter as it is found (player and time), and progress. The captain submits the word (in the default mode). It counts only if it matches and all three correct locations were discovered, so an unearned guess is rejected exactly like a wrong one. Wrong words keep every discovery. Classification is never sent to the captain or players unless `revealClassificationOnDiscovery` is set.
+The captain sees the five riddles, each letter as it is found (player and time), and progress. The captain submits the word (in the default mode) and it counts as soon as it matches, even if nobody visited the locations. With `requireDiscoveries` on, it counts only once all three correct locations were discovered, and an unearned guess is rejected exactly like a wrong one. Wrong words keep every discovery. Classification is never sent to the captain or players unless `revealClassificationOnDiscovery` is set.
 
 ## 10. Task 3 — Pose relay
 
